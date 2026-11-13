@@ -1,3 +1,9 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0b0d">
 <title>Aeris Strata Configurator</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <meta name="description" content="Procedurally modelled sports car in a real-time studio, built with Three.js.">
@@ -20,6 +26,7 @@
     --font-ui: "Manrope", "Helvetica Neue", Arial, sans-serif;
     --ease: cubic-bezier(.22, .8, .24, 1);
   }
+  [hidden] { display: none !important; }
   html, body { height: 100%; }
   body {
     margin: 0;
@@ -185,6 +192,8 @@
   }
 </style>
 
+</head>
+<body>
 <canvas id="scene" tabindex="0" aria-label="Interactive 3D view of the Aeris Strata. Drag to orbit, scroll or pinch to zoom, right-drag or two-finger drag to pan."></canvas>
 <div class="vignette"></div>
 
@@ -328,3 +337,5 @@
 }
 </script>
 <script type="module" src="./src/main.js"></script>
+</body>
+</html>

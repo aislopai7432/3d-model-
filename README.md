@@ -4,6 +4,10 @@ A mid-engine sports car modelled entirely in code with Three.js, shown in a dark
 photography-studio scene with a configurator UI. No 3D model files or images are
 loaded: every surface, texture and light is generated at runtime.
 
+## Live page
+
+https://aislopai7432.github.io/3d-model-/ (served by GitHub Pages from this branch)
+
 ## Run it
 
 Any static file server works, for example:
