@@ -1,7 +1,7 @@
 // Environments: sky, lighting, ground, set dressing and ambient life for each search area.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { groundTextures, fenceTexture, signTexture, softDot, getAtlas } from './textures.js';
+import { groundTextures, fenceTexture, signTexture, softDot, getAtlas, corrugatedTexture } from './textures.js';
 import { terrainHeight, CELL } from './pile.js';
 import { prep, tileUV } from './junk.js';
 import { mulberry, fbm3 } from './rng.js';
@@ -188,10 +188,10 @@ export function buildWorld(area, renderer, pile, groundMaterial) {
   // Huts: the refinery (gold buyer) and the equipment shop
   const hut = (x, z, rot, title, sub, kind, colour) => {
     const h = new THREE.Group();
-    const body = new THREE.Mesh(boxUV(4.2, 2.6, 2.6, zincSlot), amat);
+    const body = new THREE.Mesh(new THREE.BoxGeometry(4.2, 2.6, 2.6), new THREE.MeshStandardMaterial({ map: corrugatedTexture(kind === 'refinery' ? '#6f7d84' : '#7a6f5e', [5, 1]), metalness: 0.55, roughness: 0.55 }));
     body.position.y = 1.3;
     body.castShadow = body.receiveShadow = true;
-    const roof = new THREE.Mesh(boxUV(4.6, 0.14, 3.0, rustSlot), amat);
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.14, 3.0), new THREE.MeshStandardMaterial({ map: corrugatedTexture('#5d4a3a', [6, 1]), metalness: 0.5, roughness: 0.65 }));
     roof.position.y = 2.68;
     roof.castShadow = true;
     const door = new THREE.Mesh(new THREE.BoxGeometry(0.95, 2.0, 0.05), new THREE.MeshStandardMaterial({ color: colour, roughness: 0.6, metalness: 0.3 }));

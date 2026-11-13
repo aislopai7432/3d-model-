@@ -188,6 +188,7 @@ class Game {
     await nextFrame();
     this.world = buildWorld(area, this.renderer, this.pile, groundMat);
     this.scene.add(this.world.group, this.pile.group);
+    this.scene.updateMatrixWorld(true); // picking must work before the first rendered frame
     this.scene.environment = this.world.env;
     this.scene.fog = new THREE.FogExp2(this.world.look.fog, this.world.look.fogD);
     this.scene.background = new THREE.Color(this.world.look.fog);
@@ -519,7 +520,7 @@ class Game {
     if (on) hit = detScan(this.pile, this.hover.point.x, this.hover.point.z, det, s.toggles);
     this.detSmooth += (hit.s - this.detSmooth) * Math.min(1, dt * 10);
     const v = this.detSmooth;
-    this.rig.update(dt, this.hover && this.mode === 'pile' ? this.hover.point : null, this.hover?.normal, det, hit, s.toggles.detector && this.mode === 'pile');
+    this.rig.update(dt, this.hover && this.mode === 'pile' ? this.hover.point : null, this.hover?.normal, det, hit, s.toggles.detector && this.mode === 'pile', this.camera.position);
     // beeps: faster and louder as the signal grows, pitched by metal type
     if (on && v > 0.05) {
       this.beepTimer -= dt;

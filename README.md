@@ -1,63 +1,73 @@
-# Aeris Strata GT — procedural car configurator
+# Gold Rush
 
-A mid-engine sports car modelled entirely in code with Three.js, shown in a dark
-photography-studio scene with a configurator UI. No 3D model files or images are
-loaded: every surface, texture and light is generated at runtime.
+A 3D treasure-hunting game for the browser. You dig through huge procedurally generated rubbish piles for buried gold, sell your finds at the refinery, and buy better equipment to reach rarer treasure in harder areas.
 
-## Live page
+**Play:** https://aislopai7432.github.io/3d-model-/ (GitHub Pages, served from this branch)
 
-https://aislopai7432.github.io/3d-model-/ (served by GitHub Pages from this branch)
+Everything is generated at runtime: rubbish geometry, textures, treasure models and sound. There are no asset files. Three.js 0.160 loads from jsDelivr through an import map, and progress is saved in the browser's `localStorage`.
 
-## Run it
+## How to play
 
-Any static file server works, for example:
+1. **Search.** The rubbish piles are made of thousands of individual items in layered stacks. The metal detector follows your cursor and beeps faster and louder as it nears metal. Each metal has its own pitch: iron grunts low, gold sits in the middle and silver rings high. Junk metal (cans, iron scrap) also sets it off, so better detectors filter it out.
+2. **Dig.** Click to clear the top piece of rubbish, or hold to keep digging. Once a spot is bare, you can dig into the soil, where some treasure is buried deeper.
+3. **Collect.** Anything that glints can be clicked and collected. Finds range from 20 mg gold flakes to kilo bars and ancient artefacts.
+4. **Sell.** At the Aurum Refinery, your finds drop onto a digital scale that weighs them and counts up the payout. Scrap metal is paid at 92% of melt value (weight × purity × today's price). Coins, gems and antiques sell at their appraised value.
+5. **Upgrade.** Prospector Supply sells detectors, digging tools, bags and gear. Every upgrade changes how the game plays.
+6. **Progress.** You earn XP, levels and achievements, and unlock five search areas, from the Local Dump to the Forgotten Treasure Site.
 
-```sh
-npx serve .
-# or
-python3 -m http.server 8000
-```
+### Controls
 
-Then open `http://localhost:8000`. Three.js 0.160 is loaded from jsDelivr through an import map.
+| Action | Mouse / keyboard | Touch |
+|---|---|---|
+| Look around | Drag | One-finger drag |
+| Zoom | Scroll | Pinch |
+| Move | Right-drag, WASD or arrow keys | Two-finger drag |
+| Rotate | Q / E | |
+| Dig or collect | Click; hold to keep digging; Space | Tap; hold |
+| Detector on/off, light, scanner | T, L, F | Tool belt |
+| Bag, refinery, shop, map, menu | I, R, B, M, Esc | Dock |
 
-## Project layout
+On touch screens, the detector reads at the centre of the view.
 
-| File | What it does |
+## What upgrades change
+
+| Equipment | Effect in game |
 |---|---|
-| `index.html` | Page, configurator UI and styles, import map |
-| `src/main.js` | Renderer, post-processing, camera views and transitions, showcase mode, UI wiring, adaptive quality |
-| `src/body.js` | The body surface: section curves, longitudinal profiles, end caps, panel layout and wheel-arch trimming |
-| `src/car.js` | Builds the car from the body: panels, doors, glass, lamps, aero, mirrors, wipers, badges, interior |
-| `src/wheels.js` | Tyres with tread and sidewall lettering, three rim designs, drilled discs, callipers |
-| `src/materials.js` | Procedural textures (metal flake, carbon twill, honeycomb, tread, leather) and PBR materials |
-| `src/studio.js` | Softbox HDR environment, reflective floor, blurred contact shadow |
+| Detectors (5 tiers) | Detection range, depth, smallest detectable mass, metal identification (tone only → ferrous/non-ferrous → full metal ID and depth), iron/aluminium rejection, and a pinpoint compass on the Elite |
+| Digging tools (5 tiers) | Area cleared per stroke, stroke time, layers per stroke, soil per stroke; the Sorting Rig also auto-sifts small finds |
+| Bags (5 tiers) | How many finds you can carry before you need to sell |
+| Loupe | Wider pick-up reach for tiny flakes; shows weight and value on hover |
+| Gloves / hazmat suit | Faster digging; the suit is required for the Old Landfill |
+| Search light | Light that follows the detector head and makes gold glint more often; required for the dark Electronics Facility |
+| Riddle sieve | Automatically collects flakes and fragments as you dig through them |
+| Gold pulse scanner | Marks gold and gems within 4 m for a few seconds (20 s recharge) |
 
-## How the body is built
+## Code layout
 
-The shell is one lofted surface. Each cross-section is a closed centripetal
-Catmull-Rom curve through 12 control points (sill, rocker, widest point,
-shoulder, roof edge, roof centre). Those points follow smooth monotone
-profile curves along the car's length. The nose and tail are closed by
-super-elliptic caps that blend the section into a smooth outline as they
-shrink, so section corners don't run into the face.
+| File | Purpose |
+|---|---|
+| `index.html` | Page shell, HUD, panels and styles |
+| `src/main.js` | Game loop, input, camera, digging, collecting, refinery and shop actions, objectives, saving |
+| `src/config.js` | All tunable data: economy, treasure catalogue, equipment, areas, XP curve, achievements |
+| `src/pile.js` | Pile generation, instanced rendering of the drawn layers, heightfield picking, digging, soil craters, exposure, save state |
+| `src/junk.js` | Procedural rubbish geometry (cans, bottles, boxes, bags, clothes, tyres, electronics, machinery, rubble, pottery and more) |
+| `src/textures.js` | Texture atlas (colour, normal, roughness/metalness), ground, signs, studio environment |
+| `src/treasure.js` | Rolling finds, valuation, and real-scale treasure models |
+| `src/detector.js` | Signal model, discrimination, metal ID, coil and pinpoint visuals |
+| `src/world.js` | Sky, lighting, ground and set dressing for each area; huts, fences, cranes, ruins, gulls |
+| `src/buyer.js` | The refinery interior and its digital weighing scale |
+| `src/ui.js` | HUD, bag, shop, map, menu, refinery list, toasts and inspect modal |
+| `src/thumbs.js` | Offscreen renderer for inventory thumbnails and the 3D inspect preview |
+| `src/fx.js`, `src/audio.js` | Particles and synthesised sound |
+| `src/state.js` | Player state, saving, levels and achievements |
 
-Panel edges (door shut lines, glass, lamp housings, intakes) are inserted into
-the surface grid as exact grid lines. Each panel is cut out cleanly and becomes
-its own mesh:
+### Performance notes
 
-- the doors are solid, hinged panels with door cards and painted jambs;
-- the intakes and lamps are recessed with real depth;
-- the glass has a black frit border.
+- **Rendering:** rubbish is drawn with one shared material and one `InstancedMesh` per geometry variant. Only the top four layers of each stack are drawn, packed densely into the instance buffers, and deeper items are swapped in as you dig. A "compacted rubbish" surface fills any gaps underneath.
+- **Picking:** hover and dig targets come from ray-marching the cell heightfield, not from raycasting thousands of instances.
+- **Detector:** the detector only checks the cells within its range.
+- **Quality:** High adds ambient occlusion (GTAO), 2048 px shadows and full resolution. Phones default to Balanced, and resolution drops automatically if the frame rate falls.
 
-Wheel arches are trimmed out of the shell and lined. A sculpted scallop runs
-along the lower doors into the side intakes.
+## Run locally
 
-## Controls
-
-- Drag to orbit. Scroll or pinch to zoom. Right-drag or two-finger drag to pan.
-- **Paint:** 8 colours, plus calliper colour.
-- **Wheels:** 3 designs and 4 finishes.
-- **Lights:** headlights, brake lights, hazards, ambient cabin lighting.
-- **Cabin:** upholstery colour, opening doors, cockpit view.
-- **Camera:** 7 preset views with smooth transitions, a 360° showcase mode, reset and full screen.
-- **Quality:** High (floor reflections and bloom) or Balanced. The page also steps down on its own if the frame rate drops.
+Serve the folder with any static server, for example `python3 -m http.server`, then open `http://localhost:8000`.

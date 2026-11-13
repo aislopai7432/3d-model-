@@ -653,6 +653,39 @@ export function tileTexture(name, i = 0, repeat = [1, 1]) {
   return t;
 }
 
+// Corrugated sheet metal for huts: ribs, rust streaks and paint.
+export function corrugatedTexture(base = '#7d8a8f', repeat = [4, 2]) {
+  const W = 256, c = canvas(W), x = c.getContext('2d');
+  x.fillStyle = base;
+  x.fillRect(0, 0, W, W);
+  for (let i = 0; i < W; i += 16) {
+    const g = x.createLinearGradient(i, 0, i + 16, 0);
+    g.addColorStop(0, 'rgba(0,0,0,0.28)');
+    g.addColorStop(0.5, 'rgba(255,255,255,0.18)');
+    g.addColorStop(1, 'rgba(0,0,0,0.28)');
+    x.fillStyle = g;
+    x.fillRect(i, 0, 16, W);
+  }
+  const r = mulberry(31);
+  for (let k = 0; k < 26; k++) {
+    const sx = r() * W, len = 30 + r() * 140;
+    const g = x.createLinearGradient(0, 0, 0, len);
+    g.addColorStop(0, 'rgba(120,55,20,0.55)');
+    g.addColorStop(1, 'rgba(120,55,20,0)');
+    x.fillStyle = g;
+    x.fillRect(sx, 0, 3 + r() * 6, len);
+  }
+  x.globalCompositeOperation = 'multiply';
+  x.globalAlpha = 0.35;
+  x.drawImage(noiseTile(), 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(repeat[0], repeat[1]);
+  t.anisotropy = 8;
+  return t;
+}
+
 // Bright photo-studio environment: makes metals read clearly in thumbnails and at the refinery.
 export function studioEnvScene() {
   const s = new THREE.Scene();
