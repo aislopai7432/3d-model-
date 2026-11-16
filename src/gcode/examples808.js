@@ -1,0 +1,304 @@
+// Example part programs in SINUMERIK 808D style (Siemens mode). Each sets up its own blank and G54
+// (top centre of the stock) when loaded. Two ISO-dialect programs (G291) show the dialect switch.
+import { EXAMPLES as ISO_EXAMPLES, getExample as getIso } from './examples.js';
+
+const FACE = `; FACE MILLING WITH CYCLE71
+; BLANK 120 x 80 x 30 ALUMINIUM, G54 = TOP CENTRE
+N10 G17 G90 G71 G94 G40
+N20 G54
+N30 T1 D1 M6 ; FACE MILL D50
+N40 S3200 M3
+N50 G0 X-90 Y-25
+N60 Z25 M8
+N70 MSG("FACE MILLING 1 MM IN 2 CUTS")
+N80 CYCLE71(25,0,2,-1,-60,-40,120,80,0,0.5,35,5,0,1300,31,5)
+N90 MSG()
+N100 G0 Z100 M9
+N110 M5
+N120 G74 Z1=0
+N130 M30
+`;
+
+const POCKETS = `; RECTANGULAR POCKET WITH POCKET3
+; BLANK 120 x 80 x 30 ALUMINIUM, G54 = TOP CENTRE
+N10 G17 G90 G71 G94 G40 G54
+N20 T2 D1 M6 ; END MILL D10
+N30 S9500 M3 M8
+N40 G0 X0 Y0 Z25
+; ROUGHING, HELICAL INSERTION R3 / 1 MM PER TURN
+N50 POCKET3(25,0,2,-6,70,44,6,0,0,0,2,0.2,0.1,1400,400,0,11,6,,,,3,1)
+; FINISHING BASE AND WALL
+N60 POCKET3(25,0,2,-6,70,44,6,0,0,0,6,0,0,1000,400,0,2,6)
+N70 G0 Z100 M9
+N80 M5
+N90 G74 Z1=0
+N100 M30
+`;
+
+const CIRC = `; CIRCULAR POCKET WITH POCKET4 IN BRASS
+; BLANK 100 x 100 x 30 BRASS, G54 = TOP CENTRE
+N10 G17 G90 G71 G94 G40 G54
+N20 T2 D1 M6 ; END MILL D10
+N30 S7000 M3 M8
+N40 G0 X0 Y0 Z25
+N50 POCKET4(25,0,2,-8,28,0,0,2.5,0.2,0.1,900,300,0,11,6,,,4,1)
+N60 POCKET4(25,0,2,-8,28,0,0,8,0,0,700,300,0,2,6)
+; FOUR ELONGATED HOLES AROUND THE POCKET
+N70 T3 D1 M6 ; END MILL D6
+N80 S10000 M3 M8
+N90 G0 X0 Y0 Z25
+N100 LONGHOLE(25,0,2,-4,,4,12,0,0,32,45,0,250,900,1)
+N110 G0 Z100 M9
+N120 M5
+N130 G74 Z1=0
+N140 M30
+`;
+
+const DRILL = `; HOLE PATTERNS WITH MCALL, HOLES1, HOLES2, CYCLE82, CYCLE83
+; BLANK 120 x 80 x 25 STEEL, G54 = TOP CENTRE
+N10 G17 G90 G71 G94 G40 G54
+N20 T4 D1 M6 ; SPOT DRILL D10 90 DEG
+N30 S2400 M3 M8
+N40 F240
+N50 G0 X0 Y0 Z25
+N60 MCALL CYCLE82(25,0,2,-3.6,,0.3)
+N70 HOLES2(0,0,25,0,0,6) ; BOLT CIRCLE
+N80 HOLES1(-48,-28,0,0,96,2) ; FRONT ROW
+N90 HOLES1(-48,28,0,0,96,2) ; BACK ROW
+N100 MCALL
+N110 T5 D1 M6 ; DRILL D6.8
+N120 S1400 M3 M8
+N130 F150
+N140 G0 X0 Y0 Z25
+; DEEP HOLES WITH CHIP REMOVAL (VARI=1)
+N150 MCALL CYCLE83(25,0,2,-18,,,4,0.5,0,0,1,1)
+N160 HOLES2(0,0,25,0,0,6)
+N170 MCALL
+; CORNER HOLES WITH CHIP BREAKING (VARI=0)
+N180 MCALL CYCLE83(25,0,2,-15,,,3,0,0,0,1,0)
+N190 HOLES1(-48,-28,0,0,96,2)
+N200 HOLES1(-48,28,0,0,96,2)
+N210 MCALL
+N220 G0 Z100 M9
+N230 M5
+N240 G74 Z1=0
+N250 M30
+`;
+
+const SLOTS = `; SLOTS: SLOT1, SLOT2 AND A KEYWAY WITH RND
+; BLANK 100 x 100 x 25 ACETAL, G54 = TOP CENTRE
+N10 G17 G90 G71 G94 G40 G54
+N20 T3 D1 M6 ; END MILL D6
+N30 S10000 M3
+N40 G0 X0 Y0 Z25
+; FOUR RADIAL SLOTS 10 WIDE
+N50 SLOT1(25,0,2,-4,,4,16,10,0,0,10,45,0,250,1200,2,0,0,0)
+; THREE CIRCUMFERENTIAL SLOTS 8 WIDE ON R38
+N60 SLOT2(25,0,2,-3,,3,70,8,0,0,38,15,0,250,1200,1.5,0,0,0)
+; L-SHAPED KEYWAY WITH A ROUNDED CORNER, 1 MM PER PASS
+N70 R1=-1 ; DEPTH
+N80 G0 X-40 Y-44
+N90 G0 Z2
+LOOP_K:
+N100 G1 Z=R1 F250
+N110 G1 X-40 Y-30 F1200
+N120 G1 X-28 Y-30 RND=4
+N130 G1 X-28 Y-44
+N140 G0 Z2
+N150 G0 X-40 Y-44
+N160 R1=R1-1
+N170 IF R1>=-3 GOTOB LOOP_K
+N180 G0 Z100
+N190 M5
+N200 G74 Z1=0
+N210 M30
+`;
+
+const CONTOUR = `; CONTOUR MILLING WITH CYCLE72 (CONTOUR BETWEEN LABELS)
+; BLANK 100 x 80 x 25 ALUMINIUM, G54 = TOP CENTRE
+N10 G17 G90 G71 G94 G40 G54
+N20 T2 D1 M6 ; END MILL D10
+N30 S9500 M3 M8
+N40 G0 X-20 Y55 Z25
+; ROUGHING: TWO RINGS (2.5 MM AND 0.3 MM ALLOWANCE), 2.5 MM STEPS
+N50 CYCLE72("CONT_S:CONT_E",25,0,2,-10,2.5,2.5,0,1400,400,111,41,2,10,1400,2,10)
+N60 CYCLE72("CONT_S:CONT_E",25,0,2,-10,2.5,0.3,0,1400,400,111,41,2,10,1400,2,10)
+; FINISHING IN ONE PASS
+N70 CYCLE72("CONT_S:CONT_E",25,0,2,-10,10,0,0,900,400,112,41,2,10,900,2,10)
+N80 G0 Z100 M9
+N90 M5
+N100 G74 Z1=0
+N110 M30
+; ---- CONTOUR DEFINITION (NOT EXECUTED, READ BY CYCLE72) ----
+CONT_S: G0 X-10 Y30
+G1 X30
+G2 X40 Y20 CR=10
+G1 Y8
+G3 X40 Y-8 CR=8
+G1 Y-20
+G2 X30 Y-30 CR=10
+G1 X-10
+CONT_E: G2 X-10 Y30 CR=30
+`;
+
+const FULL = `; COMPLETE PART: FACE, POCKET, HOLES, G41 CONTOUR WITH RND, CHAMFER
+; BLANK 120 x 80 x 30 ALUMINIUM, G54 = TOP CENTRE
+N10 G17 G90 G71 G94 G40 G54
+; ---- OP1 FACE
+N20 T1 D1 M6
+N30 S3200 M3 M8
+N40 G0 X-90 Y-25 Z25
+N50 CYCLE71(25,0,2,-0.5,-60,-40,120,80,0,0.5,35,5,0,1300,31,5)
+; ---- OP2 STADIUM POCKET 64 x 24, OUTSIDE STEP WITH G41 + RND
+N60 T2 D1 M6
+N70 S9500 M3 M8
+N80 G0 X0 Y0 Z25
+N90 POCKET3(25,-0.5,2,-5.5,64,24,12,0,0,0,2,0,0,1400,400,0,11,6,,,,3,1)
+N100 G0 X70 Y-50
+N110 Z2
+N120 G1 Z-3.5 F400
+N130 G41 G1 X55 Y-35 F1400 ; CRC LEFT (CLOCKWISE = OUTSIDE): APPROACH
+N140 G1 X-55 RND=8
+N150 Y35 RND=8
+N160 X55 RND=8
+N170 Y-35 RND=8
+N180 X45
+N190 G40 G1 X45 Y-50 ; CRC OFF: RETRACT
+N200 G0 Z25
+; ---- OP3 SPOT + PECK DRILL 4 HOLES
+N210 T4 D1 M6
+N220 S6000 M3 M8
+N230 F500
+N240 G0 X0 Y0 Z25
+N250 MCALL CYCLE81(25,-0.5,2,-4.5)
+N260 HOLES1(-45,-25,0,0,90,2)
+N270 HOLES1(-45,25,0,0,90,2)
+N280 MCALL
+N290 T5 D1 M6
+N300 S4500 M3 M8
+N310 F600
+N320 G0 X0 Y0 Z25
+N330 MCALL CYCLE83(25,-0.5,2,-20.5,,,5,1,0,0,1,1)
+N340 HOLES1(-45,-25,0,0,90,2)
+N350 HOLES1(-45,25,0,0,90,2)
+N360 MCALL
+; ---- OP4 CHAMFER 1 x 45 ON THE POCKET EDGE (TOOL CENTRE PATH)
+N370 T8 D1 M6
+N380 S7000 M3 M8
+N390 G0 X-20 Y0 Z25
+N400 Z2
+N410 G1 Z-4.5 F500
+N420 G1 Y-9 F1200
+N430 X20
+N440 G3 X20 Y9 CR=9
+N450 G1 X-20
+N460 G3 X-20 Y-9 CR=9
+N470 G1 Y0
+N480 G0 Z100 M9
+N490 M5
+N500 G74 Z1=0
+N510 M30
+`;
+
+const DOME = `; PARAMETRIC DOME: R PARAMETERS, SQRT, IF / GOTOB LOOPS
+; BLANK 100 x 80 x 30 ACETAL, G54 = TOP CENTRE
+; SPHERE R40, TOP AT Z-2 ON A FLOOR AT Z-10
+N10 G17 G90 G71 G94 G40 G54
+N20 R10=40 ; SPHERE RADIUS
+N30 R11=-42 ; SPHERE CENTRE Z
+N40 R13=0.5 ; ROUGHING ALLOWANCE
+; ---- ROUGHING WITH THE FLAT END MILL, 3 LEVELS
+N50 T2 D1 M6
+N60 S9000 M3
+N70 R12=5 ; TOOL RADIUS
+N80 R20=-4 ; FIRST LEVEL
+N90 G0 X-52 Y-36 Z25
+LEVEL:
+N100 R21=-36 ; Y
+N110 G0 X-52 Y=R21
+N120 G1 Z=R20 F600
+ROW:
+N130 R22=-52 ; X
+N140 G1 Y=R21 F1800
+PT:
+N150 R23=SQRT(R22*R22+R21*R21)-R12
+N160 IF R23<0 GOTOF INSIDE
+N170 GOTOF CHECK
+INSIDE:
+N180 R23=0
+CHECK:
+N190 R30=R20
+N200 IF R23>=R10 GOTOF MOVE
+N210 R30=MAXVAL(R20,R11+SQRT(R10*R10-R23*R23)+R13)
+MOVE:
+N220 G1 X=R22 Z=R30
+N230 R22=R22+2
+N240 IF R22<=52 GOTOB PT
+N250 G0 Z2
+N260 G0 X-52
+N270 G1 Z=R20
+N280 R21=R21+6
+N290 IF R21<=36 GOTOB ROW
+N300 G0 Z2
+N310 R20=R20-3
+N320 IF R20>=-10 GOTOB LEVEL
+N330 G0 Z25
+; ---- FINISHING WITH THE BALL END MILL R4, 1.5 MM STEPOVER
+N340 T6 D1 M6
+N350 S11000 M3
+N360 R14=4 ; BALL RADIUS
+N370 R21=-38
+N380 G0 X-50 Y=R21 Z2
+N390 G1 Z-10 F800
+FROW:
+N400 R22=-50
+N410 G1 Y=R21 F2200
+FPT:
+N420 R30=-10
+N430 R23=R22*R22+R21*R21
+N440 IF R23>=(R10+R14)*(R10+R14) GOTOF FMOVE
+N450 R30=MAXVAL(-10,R11+SQRT((R10+R14)*(R10+R14)-R23)-R14)
+FMOVE:
+N460 G1 X=R22 Z=R30
+N470 R22=R22+1.5
+N480 IF R22<=50 GOTOB FPT
+N490 G0 Z2
+N500 G0 X-50
+N510 G1 Z-10
+N520 R21=R21+1.5
+N530 IF R21<=38 GOTOB FROW
+N540 G0 Z100
+N550 M5
+N560 G74 Z1=0
+N570 M30
+`;
+
+export const EXAMPLES_808 = [
+  { id: 'sie-face', name: 'CYCLE71 face milling', file: 'FACE_MILL.MPF', desc: 'Face milling with CYCLE71: two 0.5 mm cuts, zig-zag along X.', code: FACE, stock: { x: 120, y: 80, z: 30, material: 'aluminium', protrusion: 14 } },
+  { id: 'sie-pocket', name: 'POCKET3 rectangular pocket', file: 'POCKET_RECT.MPF', desc: 'Rough with helical insertion, then finish base and wall.', code: POCKETS, stock: { x: 120, y: 80, z: 30, material: 'aluminium', protrusion: 14 } },
+  { id: 'sie-circ', name: 'POCKET4 + LONGHOLE in brass', file: 'POCKET_CIRC.MPF', desc: 'Circular pocket with helical insertion and four elongated holes.', code: CIRC, stock: { x: 100, y: 100, z: 30, material: 'brass', protrusion: 14 } },
+  { id: 'sie-drill', name: 'Hole patterns (MCALL, HOLES1/2)', file: 'HOLE_PATTERN.MPF', desc: 'Spot and peck drilling in steel with modal calls on a bolt circle and two rows.', code: DRILL, stock: { x: 120, y: 80, z: 25, material: 'steel', protrusion: 14 } },
+  { id: 'sie-slots', name: 'SLOT1, SLOT2, RND keyway', file: 'SLOTS.MPF', desc: 'Radial and circumferential slot cycles plus an R-parameter loop keyway with RND.', code: SLOTS, stock: { x: 100, y: 100, z: 25, material: 'plastic', protrusion: 14 } },
+  { id: 'sie-contour', name: 'CYCLE72 contour milling', file: 'CONTOUR.MPF', desc: 'Bracket outline between labels, milled with RL=41, quarter-circle approach and depth steps.', code: CONTOUR, stock: { x: 100, y: 80, z: 25, material: 'aluminium', protrusion: 16 } },
+  { id: 'sie-full', name: 'Complete part (5 tools, G41, RND)', file: 'COMPLETE_PART.MPF', desc: 'Face, pocket, G41 outside step with RND corners, drilled holes and a chamfer, with automatic tool changes.', code: FULL, stock: { x: 120, y: 80, z: 30, material: 'aluminium', protrusion: 14 } },
+  { id: 'sie-dome', name: 'Parametric dome (R parameters)', file: 'DOME_R_PARAM.MPF', desc: 'A dome machined entirely from R-parameter arithmetic and IF/GOTOB loops: roughing then ball-nose finishing.', code: DOME, stock: { x: 100, y: 80, z: 30, material: 'plastic', protrusion: 18 } },
+];
+
+const isoPick = ['full-part', 'contour', 'surface'];
+for (const id of isoPick) {
+  const e = ISO_EXAMPLES.find((x) => x.id === id);
+  EXAMPLES_808.push({
+    id: `iso-${id}`, name: `ISO dialect: ${e.name}`, file: `ISO_${id.toUpperCase().replace(/-/g, '_')}.MPF`, desc: `${e.desc} Written in ISO (Fanuc) dialect, switched on with G291 in the first line.`,
+    lazy: () => {
+      const ex = getIso(id);
+      return { code: 'G291 ; ISO DIALECT MODE\n' + ex.code.replace(/^%\n/, ''), stock: ex.stock };
+    },
+  });
+}
+
+export function getExample808(id) {
+  const e = EXAMPLES_808.find((x) => x.id === id);
+  if (!e) return null;
+  if (e.lazy && !e.code) Object.assign(e, e.lazy());
+  return e;
+}
