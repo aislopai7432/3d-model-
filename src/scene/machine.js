@@ -710,7 +710,7 @@ export class MachineModel {
       return b;
     };
     this.cycleBtn = mkBtn(-45, M.green.clone(), 'cycleStart', 'CYCLE START');
-    this.holdBtn = mkBtn(55, M.amber.clone(), 'feedHold', 'FEED HOLD');
+    this.holdBtn = mkBtn(55, M.amber.clone(), 'feedHold', 'CYCLE STOP');
     const estopLabel = new THREE.Mesh(new THREE.PlaneGeometry(90, 18), new THREE.MeshBasicMaterial({ map: labelTexture(['EMERGENCY STOP'], { w: 256, h: 52, bg: '#d9dcdf', fg: '#a01015', font: '700 26px Arial' }) }));
     estopLabel.position.set(-150, -294, 44);
     body.add(estopLabel);

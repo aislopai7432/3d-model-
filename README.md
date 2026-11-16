@@ -1,171 +1,198 @@
-# MillLab: 3-axis CNC milling simulator
+# MillLab: 3-axis CNC milling simulator with an 808D-style control
 
-A browser-based simulator of a vertical machining centre, built with Three.js. You load or write G-code, the control interprets it block by block, the machine moves, and the cutter removes material from a real stock model. It is meant for learning CNC machining, trying out G-code and seeing what a program actually cuts.
+MillLab is a browser simulator of a vertical machining centre, operated through a control modelled on the **SINUMERIK 808D**. You can:
+
+- write part programs in Siemens mode with R parameters, cutter compensation and the standard drilling and milling cycles, or in ISO dialect;
+- design cycles and contours in programGUIDE-style input screens;
+- set up tools, wear, work offsets and the blank;
+- run the program in JOG, MDA or AUTO and watch a real Z-map model of the stock being machined.
 
 **Run it:** https://aislopai7432.github.io/3d-model-/ (GitHub Pages, served from this branch), or locally as described below.
 
-There is no build step and nothing to install. Three.js 0.160 loads from jsDelivr through an import map. Textures, tool geometry and sound are all generated at runtime, so the project has no asset files.
+There is no build step and nothing to install. Three.js 0.160 loads from jsDelivr through an import map. Textures, tools, sounds and example programs are generated at runtime.
+
+> MillLab is an independent training simulator. Its operating concept follows the SINUMERIK 808D for learning purposes, but it is not Siemens software and is not affiliated with or endorsed by Siemens AG. SINUMERIK is a trademark of Siemens AG. Always check programs against the official documentation before running them on a real machine.
 
 ## Running locally
 
-Any static file server works. ES modules don't load from `file://`, so you need one:
+ES modules do not load from `file://`, so serve the folder:
 
 ```sh
-python3 -m http.server 8000
-# then open http://localhost:8000
+python3 -m http.server 8000      # then open http://localhost:8000
 ```
 
 `npx serve .` also works. The page needs internet access once to fetch Three.js and the fonts.
 
-## What it does
+Headless tests cover the interpreters, cycles, cutter compensation, Z-map accuracy and controller execution of every example. They need only Node 18 or later:
 
-### The machine
-A VMC-560 style vertical machining centre built from separate components:
+```sh
+node tests/run.mjs
+```
 
-- **Base, column, saddle (Y), table (X) and spindle head (Z).** Each axis is its own moving assembly.
-- **Linear rails and ball screws.** The screws turn in step with axis motion, at a 10 mm lead.
-- **Telescopic way covers** that collapse and extend as the saddle moves.
-- **T-slot table** with a machine vise, parallels and the stock.
-- **Spindle head** with motor, coolant ring and three Loc-Line coolant hoses aimed at the cutter.
-- **Umbrella tool changer** with 16 pockets holding procedurally modelled tools and BT40 holders.
-- **Enclosure** with glass windows and two sliding doors, an internal LED light bar, a stack light and the operator pendant.
+## The control
 
-The pendant has a live screen. Its E-stop, Cycle Start and Feed Hold buttons, and the door handles, can all be clicked in the 3D view.
+The right-hand side is the control unit: five operating-area keys above an HMI screen, with eight horizontal and eight vertical softkeys. The machine control panel runs along the bottom.
 
-Machine travel is X 560, Y 410, Z 410 mm. Following Fanuc/Haas convention, home is X0 Y0 Z0 and all travel is negative. Rapids run at 24 m/min (Z at 18 m/min) on a trapezoidal acceleration profile. The spindle maxes out at 12,000 rpm and ramps up and down at a finite rate.
-
-### G-code interpreter
-`src/gcode/interpreter.js` compiles a program into timed operations, the way a control's graphics/verify mode does, and the controller then executes them block by block in simulated time. Supported:
-
-| Group | Codes |
+| Area | What it holds |
 |---|---|
-| Motion | G00, G01, G02, G03 (I/J/K or R; helical when the third axis changes) |
-| Planes, units, distance | G17, G18, G19, G20, G21, G90, G91, G90.1, G91.1 |
-| Offsets | G54–G59, G10 L2 (set work offset), G43 H_ / G49 tool length, G40, G53 machine-coordinate moves |
-| Return / dwell | G28 (via an intermediate point), G04 (P in seconds or ms, or X) |
-| Drilling cycles | G81, G82, G83, G73, G80, G98, G99, repeat count L |
-| Other modal codes | G94 feed per minute. G61/G64 are accepted, but the path is always followed exactly |
-| M-codes | M00, M01, M02, M03, M04, M05, M06, M07, M08, M09, M30 |
-| Words | N, O, comments in `( )` or after `;`, `%`, block delete `/` |
+| **Machine** | Actual values in WCS or MCS, with distance-to-go and a referenced marker per axis; T/F/S with load, Vc and chip load; the active G functions and program-control flags. The mode panel shows the current program blocks in AUTO, the MDA buffer in MDA, and reference status in REF POINT. Softkeys: Prog. ctrl (SBL, M01, SKP, DRY, ROV), G funct., Set WO (X=0, Y=0, Z=0 at the tool), T, S, M (tool change, spindle, coolant), JOG data, Ref. all, New blank |
+| **Offset** | Tool list (Siemens type codes 120, 110, 121, 140, 200, 220 and 230; length, radius, flutes, angle), Wear (ΔL and ΔR, plus the simulator's tool-life estimate), Work offsets G54 to G59, R variables R0 to R299, Setting data (JOG feed and spindle speed, dry-run feed, speed limit, working area limitation), Blank (material, size, clamping height) |
+| **Program** | Editor with syntax highlighting, error markers and the current block. Drilling, Milling and Contour softkeys open cycle input screens with help pictures; OK inserts the call, and Recompile on a call line edits it again. Also here: a contour designer that produces a CYCLE72 label contour or a G41/G42 path, a Simulation group, Find, Renumber, comment toggle, Execute and Save as |
+| **Program manager** | NC memory (programs stored in the browser) with Execute, Open, New, Copy, Rename, Delete, Save to PC and Load from PC. Examples is a read-only folder |
+| **System / Alarm** | Alarm list, Messages, Settings (default dialect, ISO G43 behaviour, door interlock, fresh blank per run, accuracy, visual options, volume), Service display, Reference (generated from the interpreters' own tables) and Version |
 
-Anything else is rejected with an explanation, never silently ignored. That includes G41/G42 cutter compensation, G92, G95, M98 subprograms, tapping and boring cycles, and A/B/C axes. The Reference tab is generated from the interpreter's own code table, so it always matches what is really supported.
+The **machine control panel** has these keys and controls:
 
-The interpreter reports:
+- Mode keys: **JOG**, **REF POINT**, **MDA** and **AUTO**.
+- **INC** keys: 1, 10, 100 and 1000 µm. With no INC key selected, jogging is continuous.
+- Axis keys with **RAPID**.
+- Spindle keys: CCW, stop and CW, using the JOG spindle speed.
+- Feed override knob (0–120 %, which also scales rapids with ROV) and spindle override knob (50–120 %).
+- Program control keys: **SBL**, **M01**, **SKP** and **DRY**.
+- **RESET**, **CYCLE STOP** and **CYCLE START**, plus **E-STOP**.
 
-- Syntax errors, with column positions that are underlined in the editor.
-- Modal group conflicts.
-- Missing feed rate, spindle speed or tool.
-- Arcs whose end point is not on the circle, or whose R value is too small.
-- Unknown tools and offsets.
-- Over-travel, checked for every point of every move, arcs included.
-- Warnings, for example a G43 H number that doesn't match the tool in the spindle, or blocks after M30.
+CYCLE START runs the selected program in AUTO and the MDA buffer in MDA. In JOG and REF POINT it has no function.
 
-Execution supports Cycle Start, Feed Hold, Stop, Reset, single block, Step, M00/M01 with the Optional Stop switch, feed/rapid/spindle overrides and a simulation speed from 0.25× to 100×, plus MAX. MAX runs as fast as the CPU allows while the page stays responsive. The editor highlights the executing line, and the progress bar and remaining time come from the compiled cycle-time estimate. The test runs below show that estimate matches the simulated machine time.
+The 3D pendant on the machine mirrors the screen, and its E-STOP, CYCLE START and CYCLE STOP buttons and the door handles can be clicked.
 
-### Material removal
-`src/sim/zmap.js` models the stock as a **Z-map**: a dense grid of material heights over the stock footprint. On a 3-axis machine with vertical cutters an undercut is impossible, so a heightfield represents the machined part exactly, up to the grid resolution. For every motion segment the cutter is swept along its path:
+## Programming
 
-- **Flat end mills, face mills, bull nose, ball nose, drills, spot drills and chamfer mills** all have their exact profile. A ball cuts a cusp and a drill leaves a 118° cone.
-- **Ramps and helices** are handled exactly. For each grid node the solver finds the part of the segment where that node is under the cutter, then the lowest point of the cutter envelope over that interval.
-- **Only changed areas are re-meshed.** The stock is drawn as tiles, and only the tiles the cut touched are rebuilt. Machined surfaces get feed marks, and through-holes are cut out.
+### Siemens mode (default, G290)
 
-Accuracy presets in Setup set the grid (from about 0.6 mm to 0.15 mm, up to 800,000 nodes) and the arc chord tolerance.
-
-Facing, pockets, slots, drilling, contours, multiple depth passes and 3D ball-nose surfaces all leave real geometry. You can measure that geometry with the Measure tool.
-
-### Collisions and limits
-The following raise an alarm and stop the machine:
-
-- A rapid move into material.
-- Feeding into the part with the spindle stopped.
-- Cutting deeper than the flute length, so the shank rubs the part.
-- The tool holder or spindle nose hitting the part.
-- The cutter, holder or spindle hitting the vise.
-- Hitting the table.
-
-The alarm message names the block and, where it helps, the likely cause. For example, a missing G43 means Z positions refer to the gauge line. Programmed over-travel is caught before the program starts, and jogging respects soft limits.
-
-### Cutting physics (simplified models)
-- **Spindle load** comes from the actual material removal rate times the specific cutting force of the material, against an 11 kW spindle.
-- **Cutting data.** Surface speed and chip load are shown live while cutting.
-- **Spindle temperature** follows speed and load, and coolant pulls it down.
-- **Tool wear** builds up with the volume removed. It is weighted by how abrasive the material is, whether you cut dry, and whether you exceed the recommended cutting speed. Replace a tool in the Tools tab to reset it. Wear is informational and does not change the cut geometry.
-- **Materials.** Aluminium 6061, steel 1045, brass C360 and acetal (POM). The material changes the colour, mass, cutting force, chips, wear rate and sound, and sparks appear only for fast dry cutting of steel.
-
-### Interface
-- **Left panel:** the DRO (work, machine and distance-to-go coordinates), spindle, feed, tool, coolant, temperature, active modal codes and workpiece statistics. The Manual tab has jog controls (incremental or continuous, also from the keyboard), manual spindle and coolant, overrides, tool change, homing, "go to work zero", touch-off for X0/Y0/Z0 and MDI.
-- **Centre:** the 3D view. It has view presets (iso, front, side, top, work close-up, whole machine) and toggles for the enclosure, doors, lights, way covers, toolpath preview and measuring. You can orbit, pan and zoom.
-- **Right panel:**
-  - Program: a syntax-highlighted editor with line numbers, error markers and the current line. You can import `.nc`/`.tap`/`.gcode` files by picking them or dragging them onto the viewport, and export the program.
-  - Tools: an editable tool library with a profile preview and suggested speeds and feeds.
-  - Setup: stock size, material, work offsets, accuracy and options.
-  - Log and Reference.
-- **Bottom bar:** run controls, simulation speed, progress and a big E-stop.
-- **Setup wizard:** walks through material, stock and clamping height, part zero (touch-off into any of G54–G59) and the tool list.
-
-Panels can be resized by dragging the dividers; double-click a divider to reset it. On narrow screens the layout switches to a stacked view with tabs. Settings, tools, offsets and the program are stored in `localStorage`.
-
-### Example programs
-The examples are generated by small CAM routines (`src/gcode/examples.js`) and written out the way a Fanuc/Haas post-processor would write them. Each one sets up its own stock and G54:
-
-1. **Simple facing:** a 50 mm face mill, two 0.5 mm passes.
-2. **Rectangular pocket:** ramp entry, roughing rings in three depth steps, then a finish pass with corner arcs.
-3. **Circular pocket:** G03 helical entry, spiral-out rings and a tangent-arc finish pass, in brass.
-4. **Drilling pattern:** a spot drill and a peck drill in steel using G81, G82, G83 and G73 with G98/G99.
-5. **Slot milling:** straight slots, an R50 arc slot and an incremental (G91) keyway, in acetal.
-6. **Complex contour:** a bracket outside profile with tangent arcs and a concave notch, roughed and finished.
-7. **Complete part:** face, pocket, spot, drill and chamfer, with five automatic tool changes.
-8. **3D surface:** a flat end mill roughing raster, then a ball-nose finishing raster over a sculpted dome (about 8,700 lines).
-
-## Controls
-
-| Action | Input |
+| Group | Supported |
 |---|---|
-| Cycle start / feed hold | Space, or the buttons (also on the 3D pendant) |
-| Step one block | S |
-| Stop / leave measure mode | Esc |
-| Jog X / Y | Arrow keys (step from the Manual tab; "Cont." jogs while held) |
-| Jog Z | Page Up / Page Down |
-| Views | 1 iso · 2 front · 3 side · 4 top · 5 work · 6 machine |
-| Orbit / pan / zoom | Drag · right-drag or Shift-drag · wheel (touch: drag, two-finger drag, pinch) |
+| Motion | G0, G1, and G2/G3 with I/J/K (incremental, or `I=AC(..)`), `CR=` (negative for arcs over 180°) and `TURN=` helices; G4 F (seconds) or G4 S (revolutions) |
+| Planes, dimensions | G17/G18/G19, G90/G91 plus `X=AC(..)` and `X=IC(..)` per word, G70/G71/G700/G710, G94/G95 |
+| Offsets | G54–G59 and G500, G53 or SUPA (offsets suppressed for one block), G74 reference point approach (`G74 Z1=0`), programmable frames TRANS, ATRANS, ROT and AROT (`RPL=`) |
+| Tools | `T.. M6` and `D1`/`D0`. D1 activates length and radius (geometry plus wear) and becomes active automatically after M6 |
+| Cutter compensation | G41/G42/G40 with transition circles at outside corners, intersections at inside corners and gouge detection. RND= and CHR= work between straight lines |
+| Parameters | R0–R299, `+ - * / DIV MOD`, comparisons, AND/OR/XOR/NOT, SIN COS TAN ASIN ACOS ATAN2 SQRT ABS POT TRUNC ROUND ROUNDUP EXP LN MINVAL MAXVAL |
+| Flow | Labels, GOTOF/GOTOB/GOTO/GOTOC, `IF <cond> GOTOF <label>`, MSG("…"), block skip `/` (SKP) |
+| M functions | M0 M1 M2 M3 M4 M5 M6 M7 M8 M9 M17 M30 (M40–M42 accepted) |
+| Cycles | CYCLE81, CYCLE82, CYCLE83 (chip breaking and chip removal), MCALL with HOLES1 and HOLES2, CYCLE71 face milling, POCKET3 and POCKET4 (vertical, helical and oscillating insertion; roughing and finishing), CYCLE76 and CYCLE77 spigots, LONGHOLE, SLOT1, SLOT2, and CYCLE72 contour milling of a `"START:END"` label contour with RL=40/41/42 and quarter-circle, semicircle or straight approach and retract |
 
-## Conventions you need to know
+Errors are reported in the editor and as alarms. Where an equivalent exists the alarm uses the control's number, for example:
 
-- **Work offsets** (G54–G59) store the machine coordinates of the part zero. For Z, that is the machine Z of the spindle gauge line when the tool tip touches the zero, minus the tool length. Loading an example, "Set from stock" and the wizard all compute this for you.
-- **Tool length.** With **Require G43** on (the default, as on a Fanuc or Haas control), Z positions refer to the gauge line until `G43 H_` is active. A program that forgets G43 will crash into the part, and the alarm says why. Turn the option off and the active tool's length is applied automatically.
-- **Units.** Numbers without a decimal point are whole units: `X10` is 10 mm, not 10 µm.
-- **Reset after a program.** Cycle Start never resets the stock. Press **Reset** to rewind and load a fresh blank.
+- 12080 syntax error
+- 12550 name not defined
+- 14040 error in end point of circle
+- 14080 jump destination not found
+- 61101 reference plane defined incorrectly
+- 61102 no spindle direction programmed
+- 61000 no tool offset active
+- over-travel against the travel or the working area limitation, checked for every point before the program starts
+
+Anything that is not implemented is rejected with an explanation rather than silently ignored. That includes SCALE/MIRROR, subprogram calls (`L..`), polar coordinates, CIP/AR=, turning functions and tapping cycles.
+
+### ISO dialect (G291 in the first line)
+
+This is the Fanuc-style language:
+
+- G0–G3 (I/J/K or R), G4, G10 L2, G17–G19, G20/G21, G28, G40, G43/G49 H, G53, G54–G59, G61/G64 and G90/G91 (also G90.1/G91.1), G94;
+- drilling cycles G73, G81, G82 and G83 with G80, G98/G99 and L repeats;
+- M0–M9 and M30.
+
+G41/G42, G92, G95, M98 and similar codes are rejected with explanations. Using "Require G43" (Settings) Z refers to the gauge line until G43 H_ is active, as on a Fanuc or Haas control.
+
+## Simulation
+
+**Material removal.** The blank is a Z-map, a dense grid of material heights. For 3-axis machining with vertical cutters this is exact up to the grid resolution, because such a machine cannot cut undercuts. Every motion segment sweeps the exact cutter profile: flat, ball, bull nose, face mill, 118° drill, spot drill or chamfer mill. Ramps and helices are solved per grid node. Only changed tiles are re-meshed. Machined surfaces show feed marks, and through-cuts are cut away. The accuracy preset (Settings) chooses the grid, from 0.6 to 0.15 mm, and the arc chord tolerance.
+
+**Collisions and limits.** The following raise an alarm and stop the machine:
+
+- a rapid traverse into material;
+- cutting with the spindle stopped;
+- cutting deeper than the flute length (the shank rubs);
+- the holder or spindle nose touching the part;
+- the cutter, holder or spindle hitting the vise;
+- the tool reaching the table.
+
+Programmed over-travel is caught before the program starts, and jogging stops at the soft limits or the working area limitation.
+
+**Machining physics.** These are simplified models meant to teach the trends:
+
+- Spindle load is material removal rate × the specific cutting force of the material, against an 11 kW spindle.
+- Spindle temperature follows speed and load, and coolant pulls it down.
+- Tool life is consumed by the volume cut, weighted by how abrasive the material is, by dry cutting and by excess cutting speed.
+- Materials are aluminium 6061, steel 1045, brass C360 and acetal.
+
+**Machine.** A VMC with 560 × 410 × 410 mm travel and home at X0 Y0 Z0 with negative travel, as is usual. It has:
+
+- linear rails and ball screws that turn with the axes, at a 10 mm lead;
+- telescopic way covers;
+- a 12,000 rpm spindle;
+- a 16-pocket umbrella tool changer with a full change sequence: Z home, orient, carousel in, unclamp, lift, index, lower, clamp, carousel out;
+- sliding doors with an interlock;
+- coolant hoses, LED lighting, a stack light and the pendant.
+
+Chips land on the actual machined surface and ride with the table. Coolant streams aim at the cutter. Sparks appear only when cutting steel dry at speed, or on a crash. All sound is synthesised: the spindle pitch follows rpm, the cutting noise is modulated at tooth-passing frequency, and the servos and tool changer have their own sounds.
+
+## Example programs
+
+Open them from **Prog. Mgr › Examples**. *Execute* loads the blank, sets G54 to the top centre of the blank and selects the program for AUTO.
+
+| File | Shows |
+|---|---|
+| FACE_MILL.MPF | CYCLE71, two 0.5 mm cuts, zig-zag |
+| POCKET_RECT.MPF | POCKET3 roughing with helical insertion, then finishing |
+| POCKET_CIRC.MPF | POCKET4 plus LONGHOLE in brass |
+| HOLE_PATTERN.MPF | MCALL CYCLE82/CYCLE83 on HOLES2 and HOLES1 in steel, chip removal vs chip breaking |
+| SLOTS.MPF | SLOT1, SLOT2 and an R-parameter loop keyway with RND |
+| CONTOUR.MPF | CYCLE72 on a label contour with arcs and a concave notch, RL=41, quarter-circle approach |
+| COMPLETE_PART.MPF | Five tools: face, pocket, G41 outside step with RND corners, drilling, chamfer |
+| DOME_R_PARAM.MPF | A dome machined entirely from R-parameter maths and IF/GOTOB loops |
+| ISO_*.MPF | The same kinds of parts in ISO dialect (G291) |
+
+## Keyboard
+
+| Key | Function |
+|---|---|
+| Space | CYCLE START / CYCLE STOP |
+| Esc | RESET (or leave measure mode) |
+| S | Single block step |
+| Arrows, PgUp/PgDn | Jog X/Y/Z in JOG (Shift for rapid) |
+| F1–F5 | Machine, Offset, Program, Program manager, System |
+| 1–6 | Iso, front, side, top, work and machine views |
+
+In the 3D view, drag to orbit, right-drag or Shift-drag to pan, and scroll to zoom. On touch screens use one finger, two fingers and pinch. Measure (on the view toolbar) gives point-to-point distances in work coordinates.
+
+## Conventions
+
+- **Work offsets** store the machine position of the part zero. For Z, that is the machine Z of the spindle gauge line when the tool tip touches the zero, minus the tool length. *Set WO*, *Set from blank* and the setup wizard compute this for you.
+- **Tool length in Siemens mode** comes from D1, the active cutting edge. After `D0`, Z refers to the gauge line, and the crash alarm says so if you forget.
+- **Fresh blank per run.** By default AUTO loads a fresh blank at every program start. Turn this off in Settings to run a second operation on the same part.
+- **Numbers without a decimal point are whole units** (X10 is 10 mm).
 
 ## Limitations
 
-- **No cutter radius compensation (G41/G42).** Programs must be posted as tool-centre paths, which is the CAM default "in computer" setting. G41/G42 are rejected, not silently ignored.
-- **No subprograms, macros, tapping or boring cycles, G92 or feed-per-rev.**
-- **Corners are not blended.** Feed moves run at constant speed with no corner blending (G64) or look-ahead deceleration. Rapids use trapezoidal acceleration.
-- **Grid resolution.** The Z-map resolves to the selected grid. Very small features (under about 2 cells) are approximated, and volumes carry roughly 1% sampling error at the walls.
-- **Collision checks.** The cutter, holder and spindle are checked against the stock, the vise and the table. The rest of the head and the chips are not.
-- **Spindle load, temperature and tool wear are simplified models** meant to teach the trends. They are not calibrated predictions.
-- **Rendering.** Chips, coolant and sparks are visual particles. The spindle's on-screen rotation is slowed down above a few revolutions per second to avoid strobing, and a blur sleeve shows the real speed.
+- Each tool has one cutting edge (D1). Edges D2–D9 and tool names are not supported.
+- Cutter compensation works in G17 only, with transition circles (G451 is accepted, but it also uses transition circles). Approach and retract are straight-line, NORM-style moves.
+- Not supported: subprograms (`L`, `RET`, `M98`), SCALE/MIRROR, polar coordinates, CIP/AR=, G96 and tapping or boring cycles.
+- The cycles follow the documented standard-cycle signatures, but details may differ from the real control. Examples: the default stepovers, the exact approach of CYCLE76/77, and the reference point of LONGHOLE and SLOT1 (the inner end of the slot). The blank parameters of POCKET3/4 are ignored.
+- Feed moves run at constant speed. There is no corner blending or look-ahead; rapids use trapezoidal acceleration.
+- The Z-map resolves to its grid, so features smaller than about two cells are approximated. Volumes carry about 1 % sampling error at the walls.
+- Collision checks cover the cutter, holder and spindle nose against the part, the vise and the table. The rest of the head is not checked.
+- Load, temperature and tool life are teaching models, not calibrated predictions.
+- Spindle rotation on screen is slowed above a few revolutions per second to avoid strobing; a blur sleeve shows the real speed.
 
 ## Code layout
 
-| File | Purpose |
+| Path | Purpose |
 |---|---|
-| `index.html`, `styles.css` | Layout and the dark graphite theme |
-| `src/main.js` | App wiring: material removal and collision checks per motion segment, cutting physics, measuring, frame loop, persistence |
-| `src/config.js` | Machine geometry and limits, materials, default tools, accuracy presets, tool changer timing |
-| `src/gcode/parser.js` | Tokenizer with column-accurate errors, plus the syntax highlighter |
-| `src/gcode/interpreter.js` | Modal state machine that compiles programs to timed ops: arcs, cycles, offsets, limits |
-| `src/gcode/codes.js` | Supported and unsupported code table (also feeds the Reference tab) |
-| `src/gcode/examples.js` | CAM-style generators for the example programs |
-| `src/sim/controller.js` | Runtime: run/hold/step/single block, trapezoidal rapids, tool change sequence, homing, jog, MDI, interlocks, alarms |
-| `src/sim/zmap.js` | Z-map material removal and height queries |
-| `src/sim/tooling.js` | Cutter profiles and holder dimensions |
-| `src/scene/machine.js` | The machine model and its animation |
-| `src/scene/toolmodels.js` | Fluted cutters, face mills and BT40 holders |
-| `src/scene/stockmesh.js` | Tiled, incrementally updated stock mesh |
-| `src/scene/workholding.js` | Vise, parallels, stock placement, work-zero marker |
-| `src/scene/toolpath.js` | Toolpath preview shader (rapids dashed, executed segments dimmed, x-ray pass) |
-| `src/scene/effects.js` | Chips, coolant, sparks, spindle blur |
-| `src/scene/viewer.js` | Renderer, lighting, camera presets, picking, axis gizmo |
-| `src/audio/sound.js` | Synthesised spindle, cutting, servo, coolant and tool changer sounds |
-| `src/ui/ui.js`, `src/ui/editor.js` | Panels, tool library, setup, wizard and the G-code editor |
+| `index.html`, `styles.css` | Layout, HMI and MCP styling |
+| `src/main.js` | App wiring: compile, MDA, mode-dependent cycle start, material removal and collision checks per segment, cutting physics, measuring, frame loop, persistence |
+| `src/config.js` | Machine geometry and limits, materials, default tools, accuracy presets, tool changer timing, default settings |
+| `src/gcode/siemens.js` | Siemens-mode parser and interpreter: R parameters, frames, jumps, D offsets, CRC buffering, RND/CHR, MCALL; also the syntax highlighter |
+| `src/gcode/sinucycles.js` | Drilling and milling cycles, plus the parameter metadata used by the input screens |
+| `src/gcode/crc.js` | Tool radius compensation and corner rounding geometry |
+| `src/gcode/expr.js` | Arithmetic expression evaluator |
+| `src/gcode/interpreter.js`, `parser.js`, `codes.js` | ISO dialect interpreter and its code table |
+| `src/gcode/compile.js` | Dialect detection (G290/G291) and compile entry point |
+| `src/gcode/examples808.js`, `examples.js` | Example programs (Siemens mode and generated ISO) |
+| `src/sim/controller.js` | Channel: modes, AUTO/MDA/JOG execution, single block, program control, tool change sequence, referencing, interlocks, alarms |
+| `src/sim/zmap.js`, `tooling.js` | Z-map material removal and cutter profiles |
+| `src/scene/*` | Machine model, tools, stock mesh, vise, toolpath, effects, renderer |
+| `src/ui/hmi.js` | Operating areas, pages and softkeys |
+| `src/ui/ui.js` | MCP, keyboard, program manager operations, tool editing, wizard |
+| `src/ui/cycleforms.js`, `contour.js`, `programs.js`, `editor.js` | Cycle input screens, contour designer, NC program memory and the editor |
+| `tests/` | Headless Node tests (`node tests/run.mjs`) |

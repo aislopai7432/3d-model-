@@ -425,8 +425,8 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
   .hsk { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .pos-grid { grid-template-columns: 1fr; }
   .cd { grid-template-columns: 1fr; }
-  .mcp { flex-wrap: wrap; gap: 8px; padding: 6px 8px; overflow: visible; }
-  .estop { width: 52px; height: 52px; }
+  .mcp { flex-wrap: nowrap; justify-content: flex-start; gap: 8px; padding: 6px 8px; overflow-x: auto; overscroll-behavior-x: contain; }
+  .estop { width: 52px; height: 52px; position: sticky; right: 0; }
   .vp-hud { left: 112px; gap: 8px; font-size: 11.5px; padding: 5px 8px; }
   .vp-hud > div:nth-child(n+4) { display: none; }
   .vp-top { left: 8px; right: 8px; top: 8px; }
@@ -451,5 +451,7 @@ kbd { background: var(--panel-3); border: 1px solid var(--line-2); border-bottom
 .cd-table input, .cd-table select { min-width: 44px; }
 .htable select[data-f="type"] { min-width: 170px; }
 .hform .fields { grid-template-columns: auto minmax(0, 1fr) auto; }
-.hform .fields label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hform .fields label { white-space: normal; line-height: 1.15; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.cf-in input { width: 92px !important; }
+.cf-in .unit { width: 40px; }
 .cf-help { color: var(--h-head) !important; font-weight: 600; min-height: 30px; }

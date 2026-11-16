@@ -1,0 +1,53 @@
+const R = new URL('../src/', import.meta.url).href;
+const { compileProgram } = await import(R + 'gcode/compile.js');
+const { EXAMPLES_808, getExample808 } = await import(R + 'gcode/examples808.js');
+const { DEFAULT_TOOLS, VISE, MACHINE } = await import(R + 'config.js');
+const { Controller } = await import(R + 'sim/controller.js');
+const { ZMap } = await import(R + 'sim/zmap.js');
+const { makeCutter } = await import(R + 'sim/tooling.js');
+const tools = new Map(DEFAULT_TOOLS.map((t) => [t.number, t]));
+const cutters = new Map(DEFAULT_TOOLS.map((t) => [t.number, makeCutter(t)]));
+let fail = 0;
+const only = process.argv[2];
+for (const e of EXAMPLES_808) {
+  if (only && e.id !== only) continue;
+  const ex = getExample808(e.id);
+  const st = ex.stock;
+  const prot = Math.max(2, Math.min(st.protrusion, st.z - 3));
+  const top = VISE.floor + VISE.jawHeight + prot;
+  const offsets = [{ x: -280, y: -205, z: top - MACHINE.gaugeAtZ0 }, ...Array(5).fill(0).map(() => ({ x: 0, y: 0, z: 0 }))];
+  const t0 = performance.now();
+  const res = compileProgram(ex.code, { tools, offsets, requireG43: true, arcTol: 0.01, dialect: 'siemens' }, { pos: { x: 0, y: 0, z: 0 }, tool: 0, carousel: 1 });
+  const ms = performance.now() - t0;
+  const zm = new ZMap({ x0: -st.x / 2, y0: -st.y / 2, lx: st.x, ly: st.y, top, bottom: top - st.z, cell: 0.5, maxNodes: 200000 });
+  const c = new Controller();
+  c.offsets = offsets; c.homed = true; c.pos = { x: 0, y: 0, z: 0 }; c.door.pos = c.door.target = 0;
+  c.program = res;
+  let alarm = null;
+  c.onMotion = (a, b, op) => {
+    const cut = c.tool ? cutters.get(c.tool) : null;
+    if (!cut) return null;
+    const L = cut.length;
+    const ax = a.x + 280, ay = a.y + 205, az = 500 + a.z - L, bx = b.x + 280, by = b.y + 205, bz = 500 + b.z - L;
+    zm.shankExcess = 0;
+    const v = zm.sweep(ax, ay, az, bx, by, bz, cut);
+    if (v > 0.05 && op.rapid) return `rapid into material line ${op.line + 1}`;
+    if (v > 0.05 && Math.abs(c.spindle.rpm) < 30) return `spindle stopped line ${op.line + 1}`;
+    if (zm.shankExcess > 0.3) return `shank line ${op.line + 1} excess ${zm.shankExcess.toFixed(2)}`;
+    if (bz < -0.01) return 'table';
+    return null;
+  };
+  c.simSpeed = 50;
+  c.cycleStart();
+  let frames = 0;
+  while (c.state !== 'complete' && c.state !== 'alarm' && frames < 400000) { c.update(1 / 30); frames++; }
+  const ok = !res.errors.length && c.state === 'complete';
+  if (!ok) fail++;
+  console.log(`${ok ? 'ok  ' : 'FAIL'} ${e.id.padEnd(16)} ${res.dialect} lines=${res.lineCount} ops=${res.ops.length} err=${res.errors.length} warn=${res.warnings.length} est=${(res.totalTime / 60).toFixed(2)}min compile=${ms.toFixed(0)}ms state=${c.state} removed=${zm.removedTotal.toFixed(0)}mm3 lowest=${(zm.lowest - top).toFixed(2)}`);
+  for (const er of res.errors.slice(0, 3)) console.log('   ERROR line', er.line + 1, er.msg, '|', ex.code.split('\n')[er.line]);
+  for (const w of res.warnings.slice(0, 3)) console.log('   warn line', w.line + 1, w.msg);
+  if (c.alarm) console.log('   ALARM', c.alarm);
+  if (res.workBounds) console.log('   bounds', res.workBounds.min.map((v) => v.toFixed(1)).join(','), '|', res.workBounds.max.map((v) => v.toFixed(1)).join(','));
+}
+console.log(fail ? `${fail} FAILURES` : "ALL OK");
+if (fail) process.exitCode = 1;
