@@ -806,6 +806,14 @@ function visualAngle(c, dt, app) {
   const rps = rpm / 60;
   const shown = Math.sign(rps) * Math.min(Math.abs(rps), 3 + Math.abs(rps) * 0.02);
   app._vAngle = ((app._vAngle || 0) - shown * Math.PI * 2 * dt) % (Math.PI * 200);
+  // Spindle orientation for the tool change: once stopped, turn the drive keys to line up with the
+  // carousel fork (keys along X) so they pass between the fork prongs.
+  if (c.atc.busy && rps === 0) {
+    const target = Math.round(app._vAngle / Math.PI) * Math.PI;
+    const d = target - app._vAngle;
+    // ease during the orient phase; snap if the carousel is already moving in (high sim speeds)
+    app._vAngle = c.atc.slide > 0.02 ? target : app._vAngle + Math.sign(d) * Math.min(Math.abs(d), 6 * Math.max(dt, 0));
+  }
   return app._vAngle;
 }
 

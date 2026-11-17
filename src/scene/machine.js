@@ -13,7 +13,9 @@ import { labelTexture, hazardTexture } from './textures.js';
 const TT = MACHINE.tableTopY; // 930
 const GAUGE0 = TT + MACHINE.gaugeAtZ0; // world Y of the gauge line at Z0 (1430)
 const PITCH = 10; // ball screw lead, mm/rev
-export const ATC_GEOM = { pitchR: 280, engagedX: -280, retractedX: -620 };
+// Pocket pitch radius 330 leaves the neighbouring pocket tools clear of the coolant ring (r 98) when a
+// pocket is under the spindle; retracted, the carousel stays inside the cabinet (left wall x -1030).
+export const ATC_GEOM = { pitchR: 330, engagedX: -330, retractedX: -630 };
 
 export class MachineModel {
   constructor(T, opts = {}) {
@@ -172,34 +174,37 @@ export class MachineModel {
   buildBase() {
     const B = this.base;
     const M = this.M;
-    // Enclosure plinth (sheet metal pan the machine sits in)
-    this.bx(-1050, 0, -1150, 1050, 130, 760, M.paintDark, B);
-    // leveling feet
-    for (const x of [-980, 980]) for (const z of [-1080, 690]) this.cyl(40, 30, M.black, x, 15, z, B, 'y', 16);
-    // Base casting with chamfered top
+    // Enclosure plinth (sheet metal pan the machine sits in), kept just inside the cabinet walls so
+    // its faces never share a plane with them.
+    this.bx(-1028, 0, -1128, 1028, 130, 738, M.paintDark, B);
+    // Base casting with chamfered top; the wider foot band is a few mm proud at the ends as well so
+    // the two castings don't z-fight on the front and back faces.
     this.bx(-430, 130, -1000, 430, 690, 620, M.cast, B, 14);
-    this.bx(-470, 130, -1000, 470, 300, 620, M.castDark, B, 10);
+    this.bx(-470, 130, -1004, 470, 300, 624, M.castDark, B, 10);
     // rib pockets on the base sides
     for (let z = -820; z <= 500; z += 220) {
       this.bx(-436, 330, z, -428, 650, z + 140, M.castDark, B);
       this.bx(428, 330, z, 436, 650, z + 140, M.castDark, B);
     }
-    // ground mounting pads for the Y rails
-    for (const x of [-300, 300]) this.bx(x - 32, 690, -600, x + 32, 700, 600, M.castDark, B);
+    // ground mounting pads for the Y rails (they run from the column foot to the base front)
+    for (const x of [-300, 300]) this.bx(x - 32, 690, -446, x + 32, 700, 600, M.castDark, B);
     // Y linear rails (profile rails with a groove)
     for (const x of [-300, 300]) {
-      this.bx(x - 17, 700, -590, x + 17, 730, 590, M.rail, B);
-      this.bx(x - 18, 712, -590, x + 18, 716, 590, M.castDark, B);
+      this.bx(x - 17, 700, -446, x + 17, 730, 590, M.rail, B);
+      this.bx(x - 18, 712, -446, x + 18, 716, 590, M.castDark, B);
     }
-    // Y ball screw supports + motor at the rear
-    this.bx(-55, 690, -650, 55, 760, -600, M.cast, B, 6);
-    this.bx(-55, 690, 600, 55, 760, 640, M.cast, B, 6);
-    this.bx(-70, 650, -760, 70, 790, -650, M.black, B, 8);
+    // Y ball screw bearing blocks, low enough to pass under the way covers; motor on the back of the base
+    this.bx(-55, 690, -446, 55, 734, -418, M.cast, B, 6);
+    this.bx(-55, 690, 578, 55, 732, 612, M.cast, B, 6);
+    // end plate the front way cover is bolted to (closes the gap under the raised cover end)
+    this.bx(-376, 690, 612, 376, 772, 624, M.castDark, B, 3);
+    this.bx(-70, 560, -1110, 70, 680, -1004, M.black, B, 8);
+    this.cyl(26, 16, M.black, 0, 620, -1118, B, 'z', 16);
     // chip augers along the base sides (inside the enclosure trough)
     for (const x of [-500, 500]) this.cyl(60, 1500, M.interior, x, 470, -180, B, 'z', 20);
     // Y screw (rotates)
-    this.yScrew = this.makeScrew(16, 1220, 'z');
-    this.yScrew.position.set(0, 718, 0);
+    this.yScrew = this.makeScrew(16, 1036, 'z');
+    this.yScrew.position.set(0, 718, 80);
     this.yScrew.userData.keep = true;
     B.add(this.yScrew);
   }
@@ -235,12 +240,15 @@ export class MachineModel {
     const B = this.base;
     const M = this.M;
     this.bx(-330, 690, -1000, 330, 2480, -450, M.cast, B, 18);
-    // flared foot
-    this.bx(-420, 690, -1000, 420, 860, -430, M.cast, B, 14);
-    // side ribs / lightening pockets
+    // flared foot: 4 mm proud of the column front/back so the faces don't share a plane. The rear
+    // way cover slides into a wiper slot in its front face.
+    this.bx(-420, 690, -1004, 420, 860, -446, M.cast, B, 14);
+    this.bx(-384, 694, -449, 384, 772, -445, M.rubber, B);
+    // side ribs / lightening pockets (kept below the column top)
     for (let y = 950; y < 2350; y += 330) {
-      this.bx(-336, y, -930, -326, y + 240, -520, M.castDark, B);
-      this.bx(326, y, -930, 336, y + 240, -520, M.castDark, B);
+      const y1 = Math.min(y + 240, 2440);
+      this.bx(-336, y, -930, -326, y1, -520, M.castDark, B);
+      this.bx(326, y, -930, 336, y1, -520, M.castDark, B);
     }
     // rail pads and Z rails
     this.bx(-250, 950, -455, 250, 2470, -440, M.castDark, B);
@@ -251,8 +259,9 @@ export class MachineModel {
     // Z screw supports, motor on top
     this.bx(-50, 1000, -445, 50, 1050, -380, M.cast, B, 6);
     this.bx(-50, 2400, -445, 50, 2470, -380, M.cast, B, 6);
-    this.bx(-75, 2480, -500, 75, 2690, -360, M.black, B, 10);
-    this.cyl(30, 40, M.black, 0, 2585, -340, B, 'z', 16);
+    // Z servo motor on top of the column (clear of the cabinet roof at y 2680)
+    this.bx(-75, 2480, -500, 75, 2655, -360, M.black, B, 10);
+    this.cyl(30, 40, M.black, 0, 2568, -340, B, 'z', 16);
     this.zScrew = this.makeScrew(16, 1360, 'y');
     this.zScrew.position.set(0, 1730, -408);
     B.add(this.zScrew);
@@ -267,52 +276,65 @@ export class MachineModel {
     this.saddle = S;
     this.root.add(S);
     const M = this.M;
-    this.bx(-390, 752, -280, 390, 850, 280, M.cast, S, 12);
-    this.bx(-420, 760, -240, 420, 840, 240, M.castDark, S, 8);
-    // Y carriages
-    for (const x of [-300, 300]) for (const z of [-200, 200]) this.bx(x - 38, 718, z - 55, x + 38, 754, z + 55, M.rail, S, 3);
+    // Saddle casting. It is 440 deep so that at the back of the Y travel (saddle at z -205) it stops
+    // short of the column foot (front face z -446), and 860 wide so the X rails can carry the table
+    // carriages over the full X travel.
+    this.bx(-430, 752, -220, 430, 846, 220, M.cast, S, 12);
+    this.bx(-436, 770, -200, 436, 828, 200, M.castDark, S, 6);
+    // Y carriages (stay on the Y rails, z -446..590, over the whole travel)
+    for (const x of [-300, 300]) for (const z of [-160, 160]) this.bx(x - 38, 718, z - 50, x + 38, 754, z + 50, M.rail, S, 3);
     // Y ball nut housing
-    this.bx(-55, 690, -60, 55, 752, 60, M.castDark, S, 6);
+    this.bx(-55, 696, -60, 55, 752, 60, M.castDark, S, 6);
     // X rails
     for (const z of [-125, 125]) {
-      this.bx(-380, 850, z - 15, 380, 876, z + 15, M.rail, S);
-      this.bx(-380, 860, z - 16, 380, 864, z + 16, M.castDark, S);
+      this.bx(-430, 846, z - 15, 430, 872, z + 15, M.rail, S);
+      this.bx(-430, 856, z - 16, 430, 860, z + 16, M.castDark, S);
     }
-    // X screw supports, motor and coupling
-    this.bx(-410, 850, -45, -370, 905, 45, M.cast, S, 5);
-    this.bx(370, 850, -45, 420, 905, 45, M.cast, S, 5);
-    this.bx(420, 800, -65, 640, 930, 65, M.black, S, 8);
-    this.cyl(22, 30, M.black, 655, 865, 0, S, 'x', 16);
-    this.bx(560, 930, -30, 620, 960, 30, M.black, S, 4); // connector
-    this.cyl(9, 140, M.orange, 590, 1000, -80, S, 'z', 10);
-    this.xScrew = this.makeScrew(14, 780, 'x');
-    this.xScrew.position.set(0, 866, 0);
+    // X ball screw sits low between the rails, under the table (table underside is y 870). Bearing
+    // blocks at the saddle ends and the servo motor on the right end face all stay below y 870, so the
+    // table can travel over them.
+    this.bx(-428, 846, -28, -396, 867, 28, M.cast, S, 4);
+    this.bx(396, 846, -28, 428, 867, 28, M.cast, S, 4);
+    this.bx(436, 772, -52, 586, 864, 52, M.black, S, 8);
+    this.bx(430, 790, -40, 438, 850, 40, M.castDark, S); // motor flange
+    this.cyl(22, 24, M.black, 598, 818, 0, S, 'x', 16);
+    this.bx(496, 790, 52, 546, 830, 70, M.black, S, 4); // connector
+    this.cyl(9, 40, M.orange, 521, 810, 88, S, 'z', 10);
+    this.cyl(9, 70, M.orange, 521, 773, 106, S, 'y', 10);
+    this.xScrew = this.makeScrew(10, 820, 'x');
+    this.xScrew.position.set(0, 858, 0);
     S.add(this.xScrew);
     // Telescopic way covers (front: saddle -> base front; rear: column -> saddle)
     this.covers = new THREE.Group();
     this.covers.name = 'covers';
     this.root.add(this.covers);
-    this.frontCover = this.makeCover(6, 112, 1);
-    this.rearCover = this.makeCover(5, 92, -1);
+    // Front: 6 x 112 (compressed 112, saddle front gap is 195..605). Rear: 5 x 180, fixed inside the
+    // column foot so it can retract into the wiper slot (gap 375..785 from that anchor).
+    this.frontCover = this.makeCover(6, 112, -1);
+    this.rearCover = this.makeCover(5, 180, 1);
   }
 
+  // dir: which way the cover extends from its fixed end (+1 = towards +Z).
   makeCover(n, segLen, dir) {
+    // Sections nest: each one is a little narrower and lower than the one before. They are narrower
+    // than the base top (x +-430) and their skirts stop above it (y 690).
     const secs = [];
     for (let k = 0; k < n; k++) {
-      const w = 900 - k * 12;
+      const w = 740 - k * 10;
       const g = new THREE.Group();
       const top = new THREE.Mesh(new THREE.BoxGeometry(w, 4, segLen), this.M.wayCover);
       top.position.y = 0;
       g.add(top);
       for (const s of [-1, 1]) {
-        const side = new THREE.Mesh(new THREE.BoxGeometry(4, 60, segLen), this.M.wayCover);
-        side.position.set((s * w) / 2, -30, 0);
+        const side = new THREE.Mesh(new THREE.BoxGeometry(4, 42, segLen), this.M.wayCover);
+        side.position.set((s * w) / 2, -21, 0);
         g.add(side);
       }
+      // wiper lip on the end that faces the saddle, riding over the next (smaller) section
       const lip = new THREE.Mesh(new THREE.BoxGeometry(w + 4, 8, 6), this.M.paintDark);
       lip.position.set(0, 2, (dir * segLen) / 2);
       g.add(lip);
-      g.userData.y = 762 - k * 5;
+      g.userData.y = 766 - k * 5;
       this.covers.add(g);
       secs.push(g);
     }
@@ -370,8 +392,10 @@ export class MachineModel {
     Tg.add(table);
     // table underside, carriages, nut bracket
     this.bx(-tb.length / 2 + 20, 870, -hw + 20, tb.length / 2 - 20, TT - H, hw - 20, M.cast, Tg);
-    for (const x of [-250, 250]) for (const z of [-125, 125]) this.bx(x - 50, 860, z - 34, x + 50, 878, z + 34, M.rail, Tg, 3);
-    this.bx(-45, 874, -40, 45, 880, 40, M.castDark, Tg);
+    // carriages close to the middle so they stay on the X rails (x +-430) at both ends of the travel
+    for (const x of [-90, 90]) for (const z of [-125, 125]) this.bx(x - 50, 856, z - 34, x + 50, 878, z + 34, M.rail, Tg, 3);
+    // ball nut bracket hanging round the X screw
+    this.bx(-40, 849, -30, 40, 871, 30, M.castDark, Tg, 3);
     // end plates and chip guards
     for (const s of [-1, 1]) this.bx(s * (tb.length / 2) - 4, 870, -hw, s * (tb.length / 2) + 4, TT + 4, hw, M.paintDark, Tg);
     this.workGroup = new THREE.Group();
@@ -436,7 +460,8 @@ export class MachineModel {
     H.add(fins);
     this.cyl(105, 22, M.paintDark, 0, 926, -60, H, 'y', 40);
     this.bx(-45, 870, -250, 45, 950, -175, M.black, H, 6);
-    this.cyl(10, 260, M.orange, 30, 1000, -260, H, 'y', 10);
+    // short cable tail (stays under the cabinet roof when the head lifts for a tool change)
+    this.cyl(10, 140, M.orange, 30, 950, -260, H, 'y', 10);
     // rotor (rotates) - spindle face with drive keys; tool models are added to it
     this.rotor = new THREE.Group();
     this.rotor.name = 'rotor';
@@ -445,11 +470,12 @@ export class MachineModel {
     face.position.y = -1;
     this.rotor.add(face);
     for (const s of [-1, 1]) this.bx(s * 46 - 7, -6, -8, s * 46 + 7, 0, 8, M.castDark, this.rotor);
-    // Loc-Line coolant hoses aimed at the cutter
+    // Loc-Line coolant hoses aimed at the cutter. They hang on the +X side of the spindle, away from
+    // the tool changer that swings in from -X, so the carousel and pocket tools never pass through them.
     const segGeo = new THREE.SphereGeometry(6.5, 10, 8);
     const coneGeo = new THREE.CylinderGeometry(3, 6, 18, 10);
     coneGeo.translate(0, -9, 0);
-    for (const a of [Math.PI * 0.25, Math.PI * 0.85, Math.PI * 1.45]) {
+    for (const a of [-Math.PI * 0.3, Math.PI * 0.05, Math.PI * 0.32]) {
       const start = new THREE.Vector3(Math.cos(a) * 92, 42, Math.sin(a) * 92);
       const mid = new THREE.Vector3(Math.cos(a) * 110, -10, Math.sin(a) * 110);
       const end = new THREE.Vector3(Math.cos(a) * 62, -58, Math.sin(a) * 62);
@@ -487,8 +513,9 @@ export class MachineModel {
     A.add(this.atcSlide);
     this.bx(-90, 1800, -55, 90, 1846, 55, M.paintDark, this.atcSlide, 6);
     this.cyl(30, 280, M.chrome, 0, 1665, 0, this.atcSlide, 'y', 20);
-    // pneumatic slide cylinder (body fixed, rod follows the carriage)
-    this.cyl(26, 300, M.paintDark, -1000, 1905, 0, this.base, 'x', 16);
+    // pneumatic slide cylinder (body fixed inside the cabinet, rod follows the carriage)
+    this.cyl(26, 140, M.paintDark, -950, 1905, 0, this.base, 'x', 16);
+    this.bx(-1000, 1840, -22, -950, 1882, 22, M.cast, this.base, 3); // cylinder mount on the rail end
     this.atcRod = this.cyl(8, 1, M.chrome, 0, 1905, 0, this.root, 'x', 10);
     this.atcRod.userData.keep = true;
     this.bx(-30, 1846, -20, 30, 1920, 20, M.paintDark, this.atcSlide);
@@ -496,19 +523,22 @@ export class MachineModel {
     this.carousel.position.y = GAUGE0;
     this.atcSlide.add(this.carousel);
     const R = ATC_GEOM.pitchR;
-    const disc = new THREE.Mesh(new THREE.CylinderGeometry(R - 28, R - 28, 14, 64), M.paintDark);
-    disc.position.y = -6;
+    // Disc stops 40 mm short of the pocket centres so it clears the BT40 flanges (r 31.75), and sits
+    // below the spindle face and drive keys (y >= -6) when a pocket is under the spindle.
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(R - 40, R - 40, 12, 64), M.paintDark);
+    disc.position.y = -14;
     this.carousel.add(disc);
     const dome = new THREE.Mesh(new THREE.SphereGeometry(120, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), M.paint);
-    dome.position.y = 2;
+    dome.position.y = -8;
     dome.scale.y = 0.9;
     this.carousel.add(dome);
     const label = new THREE.Mesh(new THREE.CylinderGeometry(121, 121, 18, 48, 1, true), M.accent);
-    label.position.y = 10;
+    label.position.y = 1;
     this.carousel.add(label);
     this.pockets = [];
     const P = MACHINE.atcPockets;
-    const prong = new THREE.BoxGeometry(22, 14, 18);
+    // fork prongs sit in the flange V-groove (y -1..-12, r >= 27.5) without cutting into the flange
+    const prong = new THREE.BoxGeometry(40, 6, 15);
     const numMat = new Map();
     for (let k = 1; k <= P; k++) {
       const a = ((k - 1) / P) * Math.PI * 2;
@@ -518,18 +548,19 @@ export class MachineModel {
       // fork: two prongs either side of the holder flange
       for (const s of [-1, 1]) {
         const p = new THREE.Mesh(prong, M.chrome);
-        p.position.set(-6, -8, s * 36);
+        p.position.set(-16, -6.5, s * 37.5);
         pocket.add(p);
       }
-      const back = new THREE.Mesh(new THREE.BoxGeometry(18, 14, 90), M.paintDark);
-      back.position.set(-38, -8, 0);
+      const back = new THREE.Mesh(new THREE.BoxGeometry(12, 10, 90), M.paintDark);
+      back.position.set(-42, -12, 0);
       pocket.add(back);
       // pocket number tag
       const tex = labelTexture([String(k)], { w: 64, h: 64, bg: '#2f7de1', fg: '#ffffff', font: '700 44px Arial' });
       numMat.set(k, tex);
+      // number tag lying on the disc top, inboard of the pocket
       const tag = new THREE.Mesh(new THREE.PlaneGeometry(22, 22), new THREE.MeshBasicMaterial({ map: tex }));
-      tag.position.set(-48, -8, 0);
-      tag.rotation.y = -Math.PI / 2;
+      tag.position.set(-72, -7.7, 0);
+      tag.rotation.set(-Math.PI / 2, 0, Math.PI / 2);
       pocket.add(tag);
       this.carousel.add(pocket);
       this.pockets[k] = pocket;
@@ -546,8 +577,9 @@ export class MachineModel {
     const X = 1050, ZB = -1150, ZF = 760, YT = 2700;
     // front lower skirt with kick plate
     this.bx(-X, 130, ZF - 20, X, 1000, ZF, M.paint, S);
-    this.bx(-X, 0, ZF - 20, X, 130, ZF + 4, M.paintDark, S);
-    this.bx(-X, 985, ZF - 20, X, 1000, ZF + 60, M.paintDark, S); // door sill
+    // kick plate and door sill run 2 mm past the side walls so their ends don't share a plane with them
+    this.bx(-X - 2, 0, ZF - 20, X + 2, 130, ZF + 4, M.paintDark, S);
+    this.bx(-X - 2, 985, ZF - 20, X + 2, 1000, ZF + 60, M.paintDark, S); // door sill
     // fixed side panels at the front
     this.bx(-X, 1000, ZF - 20, -620, 2350, ZF, M.paint, S);
     this.bx(620, 1000, ZF - 20, X, 2350, ZF, M.paint, S);
@@ -591,10 +623,16 @@ export class MachineModel {
     };
     slope(-1030, -540);
     slope(1030, 540);
-    const fr = new THREE.Mesh(new THREE.BoxGeometry(2060, 6, 330), M.interior);
-    fr.position.set(0, 820, 690);
-    fr.rotation.x = -0.75;
-    S.add(fr);
+    // front chip guard: from the base front edge (z 620, just above the way cover's fixed end) up to
+    // the inside of the front skirt under the door sill (z 738, y 982)
+    {
+      const z0 = 626, y0 = 692, z1 = 738, y1 = 982;
+      const len = Math.hypot(z1 - z0, y1 - y0);
+      const fr = new THREE.Mesh(new THREE.BoxGeometry(2060, 6, len), M.interior);
+      fr.position.set(0, (y0 + y1) / 2, (z0 + z1) / 2);
+      fr.rotation.x = -Math.atan2(y1 - y0, z1 - z0);
+      S.add(fr);
+    }
     this.bx(-1030, 560, -1130, -540, 566, 740, M.interior, S);
     this.bx(540, 560, -1130, 1030, 566, 740, M.interior, S);
   }
@@ -629,7 +667,8 @@ export class MachineModel {
       for (const rx of [-w / 2 + 90, w / 2 - 90]) this.cyl(20, 22, M.black, rx, h + 15, 0, d, 'z', 14);
       d.position.set(s * (w / 2 - 10), 1000, z);
       d.userData.closedX = s * (w / 2 - 10);
-      d.userData.openX = s * (w / 2 - 10) + s * 610;
+      // open travel keeps the door (and its rollers) on the track, inside the cabinet width
+      d.userData.openX = s * (w / 2 - 10) + s * 420;
       this.enclosure.add(d);
       this.doors.push(d);
     }
@@ -643,8 +682,9 @@ export class MachineModel {
     this.pendant = P;
     this.root.add(P);
     // arm from the header
-    this.cyl(26, 420, M.paintDark, 990, 2160, 952, this.root, 'y', 16);
-    this.bx(940, 2340, 760, 1040, 2400, 990, M.paintDark, this.root, 8);
+    // bracket sits above the door track and door rollers (y <= 2385)
+    this.cyl(26, 440, M.paintDark, 990, 2170, 952, this.root, 'y', 16);
+    this.bx(940, 2388, 760, 1040, 2440, 990, M.paintDark, this.root, 8);
     const body = new THREE.Group();
     body.position.set(990, 1630, 990);
     body.rotation.set(-0.12, -0.32, 0);
@@ -834,14 +874,14 @@ export class MachineModel {
     this.zScrew.userData.spin.rotation.y = ang(headZ);
     // way covers: front from base front edge to saddle front, rear from column to saddle back
     const sz = this.saddle.position.z;
-    this.layoutCover(this.frontCover, 620, sz + 280);
-    this.layoutCover(this.rearCover, -470, sz - 280);
+    this.layoutCover(this.frontCover, 620, sz + 220);
+    this.layoutCover(this.rearCover, -800, sz - 220);
     // doors
     for (const d of this.doors) d.position.x = d.userData.closedX + (d.userData.openX - d.userData.closedX) * (s.door || 0);
     // tool changer
     const slide = s.atcSlide || 0;
     this.atcSlide.position.x = ATC_GEOM.retractedX + (ATC_GEOM.engagedX - ATC_GEOM.retractedX) * slide;
-    const rodA = -850, rodB = this.atcSlide.position.x;
+    const rodA = -880, rodB = this.atcSlide.position.x;
     this.atcRod.position.x = (rodA + rodB) / 2;
     this.atcRod.scale.x = rodB - rodA;
     this.carousel.rotation.y = s.atcAngle || 0;
