@@ -109,7 +109,7 @@ export class UI {
       home: () => c().home(),
       newBlank: () => {
         if (c().exec) return this.log('Stop the program before loading a new blank', 'warn');
-        if (app.game?.blockNewBlank()) return;
+        if (app.game?.blockStockChange('New blank')) return;
         app.stockEmpty = false;
         app.rebuildStock();
         this.log('Fresh blank loaded');
@@ -598,6 +598,7 @@ export class UI {
   applyStockForm() {
     const app = this.app;
     if (this.c.exec) return this.log('Stop the program before changing the blank', 'warn');
+    if (app.game?.blockStockChange('Load blank')) return;
     const st = { x: +$('#bkX').value, y: +$('#bkY').value, z: +$('#bkZ').value, protrusion: +$('#bkP').value, material: $('#bkMat').value };
     const err = validateStock(st);
     if (err) return this.log(err, 'error');
@@ -621,6 +622,8 @@ export class UI {
 
   setOption(k, v) {
     const app = this.app, s = app.settings;
+    // a new accuracy re-creates the Z-map: in the workshop that would throw away the machined blank
+    if (k === 'accuracy' && !app.stockEmpty && app.zmap?.removedTotal > 0 && app.game?.blockStockChange('Accuracy')) { this.hmi.rerender(); return; }
     s[k] = v;
     if (k === 'accuracy') {
       if (this.c.exec) { this.log('Stop the program before changing the accuracy', 'warn'); return; }
@@ -940,6 +943,7 @@ export class UI {
   // ------------------------------------------------------------------ setup wizard
   openWizard() {
     if (this.c.exec) return this.log('Stop the program before running the setup wizard', 'warn');
+    if (this.app.game?.blockStockChange('Setup wizard')) return;
     const app = this.app;
     this.wz = { step: 0, material: app.stock.material, stock: { ...app.stock }, zero: this.zeroPos, wcs: this.zeroIdx, home: !this.c.homed };
     $('#wizard').hidden = false;

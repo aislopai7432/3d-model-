@@ -21,6 +21,7 @@ import { Sound } from './audio/sound.js';
 import { UI } from './ui/ui.js';
 import { buildWorkshop } from './scene/workshop.js';
 import { Game } from './game/game.js';
+import { applyZMapState, zmapFromState } from './game/partstore.js';
 
 const STORE = 'milllab.v1';
 const $ = (s) => document.querySelector(s);
@@ -121,6 +122,9 @@ class App {
     this.viewer.scene.fog = new THREE.Fog(0x9aa0a6, 16000, 34000);
     this.game = new Game(this);
     window.__game = this.game;
+    // machined parts (vise / hands / inspection plate) come back from IndexedDB before the first frame
+    this.ui.loading('Restoring the workshop…');
+    await this.game.restoreParts();
     this.ui.loading(null);
     this.last = performance.now();
     this.uiTimer = 0;
@@ -191,6 +195,26 @@ class App {
     this.clearMeasure();
     this.stats.removedTotal = 0;
     this.ui?.updateStockInfo();
+  }
+
+  // Workshop game: put saved Z-map heights (a machined part) back into the stock in the vise.
+  restoreStockZMap(state) {
+    if (!state) return false;
+    if (!applyZMapState(this.zmap, state)) {
+      // different grid (accuracy changed): adopt the saved Z-map as it is
+      const z = zmapFromState(Object.getPrototypeOf(this.zmap), state);
+      if (!z) return false;
+      this.machine.workGroup.remove(this.stockMesh.group);
+      this.stockMesh.dispose();
+      this.zmap = z;
+      this.stockMesh = new StockMesh(z, MATERIALS[this.stock.material] || MATERIALS.aluminium);
+      this.stockMesh.group.visible = !this.stockEmpty;
+      this.machine.workGroup.add(this.stockMesh.group);
+    }
+    this.stockMesh.update(true);
+    this.effects.clear();
+    this.ui?.updateStockInfo();
+    return true;
   }
 
   // Workshop game: an empty vise has no stock to cut (removal and stock collisions are skipped).
@@ -279,9 +303,14 @@ class App {
     if (c.estop || c.state === 'alarm') return c.cycleStart();
     if (c.exec) return;
     if (c.mode === 'AUTO') {
-      if (this.settings.freshBlank && !this.stockEmpty && !this.game?.manualBlanks && this.zmap.removedTotal > 0) {
-        this.rebuildStock();
-        this.ui.log('Fresh blank loaded for the new cycle (Settings: "Fresh blank at each AUTO start")');
+      if (this.settings.freshBlank && !this.stockEmpty && this.zmap.removedTotal > 0) {
+        if (this.game?.manualBlanks) {
+          // workshop: the blank in the vise is a real one; running again keeps cutting the same material
+          this.ui.log('Workshop: running again on the same blank ("Fresh blank at each AUTO start" only applies in the simulator)');
+        } else {
+          this.rebuildStock();
+          this.ui.log('Fresh blank loaded for the new cycle (Settings: "Fresh blank at each AUTO start")');
+        }
       }
       this.toolpath.setProgress(-1);
       c.cycleStart();
@@ -303,7 +332,7 @@ class App {
     this.programs.setCurrent(name);
     this.ui.editor.setValue(text);
     const ex = this.programs.info(name)?.example;
-    if (ex && !this._exampleBlankLoaded) {
+    if (ex && !this._exampleBlankLoaded && !this.game?.manualBlanks) {
       const e = getExample808(ex);
       if (e) {
         this.stock = { ...this.stock, ...e.stock };
@@ -321,15 +350,23 @@ class App {
     const ex = getExample808(id);
     if (!ex) return;
     if (this.controller.exec) this.controller.stop();
-    this.stock = { ...this.stock, ...ex.stock };
-    this.rebuildStock();
-    this.setZeroFromStock('top-center', 0, true);
+    // workshop: example programs open as programs only; the blank in the vise stays as it is
+    const keepBlank = !!this.game?.manualBlanks;
+    if (!keepBlank) {
+      this.stock = { ...this.stock, ...ex.stock };
+      this.rebuildStock();
+      this.setZeroFromStock('top-center', 0, true);
+    }
     const name = ex.file;
     if (!this.programs.has(name) || this.programs.info(name)?.example === id) this.programs.put(name, ex.code, { example: id });
     this._exampleBlankLoaded = true;
     this.openProgram(name);
     this.ui.renderSetup();
-    if (!initial) this.ui.log(`${ex.file}: ${ex.name}. Blank ${ex.stock.x} × ${ex.stock.y} × ${ex.stock.z} mm ${MATERIALS[ex.stock.material].short}, G54 at the top centre.`);
+    if (keepBlank) {
+      const st = ex.stock;
+      this.ui.log(`${ex.file}: ${ex.name}. Opened as a program only. ${this.game.blankMessage()} (This example expects a ${st.x} × ${st.y} × ${st.z} mm ${MATERIALS[st.material].short.toLowerCase()} blank with G54 at its top centre.)`, 'warn');
+      this.game.ui.toast(`${ex.file} opened as a program only: the blank in the vise was not changed.`, 'warn', 5000);
+    } else if (!initial) this.ui.log(`${ex.file}: ${ex.name}. Blank ${ex.stock.x} × ${ex.stock.y} × ${ex.stock.z} mm ${MATERIALS[ex.stock.material].short}, G54 at the top centre.`);
   }
 
   applyControllerSettings() {

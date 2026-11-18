@@ -501,7 +501,7 @@ export class HMI {
       <label>Width Y (mm)<input id="bkY" type="number" min="10" max="${VISE.maxOpening}" value="${st.y}"></label>
       <label>Height Z (mm)<input id="bkZ" type="number" min="6" max="120" value="${st.z}"></label>
       <label>Above the jaws (mm)<input id="bkP" type="number" min="2" max="80" value="${st.protrusion}"></label>
-    </div><div class="hbox-b hnote">"Load blank" puts a fresh blank of this size in the vise and sets the work offset chosen on the Work offset page (${this.ui.zeroPos.replace(/-/g, ' ')} → G${54 + this.ui.zeroIdx}).</div></div>
+    </div>${app.game?.manualBlanks ? `<div class="hbox-b herr">${esc(app.game.blankMessage())}${app.stockEmpty ? ' The vise is empty.' : ''}</div>` : ''}<div class="hbox-b hnote">"Load blank" puts a fresh blank of this size in the vise and sets the work offset chosen on the Work offset page (${this.ui.zeroPos.replace(/-/g, ' ')} → G${54 + this.ui.zeroIdx}).</div></div>
     <div class="hbox"><div class="hbox-h">Current blank</div><div class="hbox-b kvl">
       <span>Material</span><b>${esc(spec.name)}</b><span>Size</span><b>${st.x} × ${app.placement?.width ?? st.y} × ${st.z} mm, ${app.placement ? app.placement.protrusion.toFixed(1) : '-'} mm above the jaws</b>
       <span>Removed</span><b>${z ? (z.removedTotal / 1000).toFixed(2) : 0} cm³ (${z ? ((z.removedTotal / z.initialVolume) * 100).toFixed(2) : 0}%)</b><span>Part mass</span><b>${mass.toFixed(1)} g</b>

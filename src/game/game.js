@@ -10,6 +10,8 @@ import { inspectPart } from './inspect.js';
 import { drawingCanvas } from './drawing.js';
 import { StockMesh } from '../scene/stockmesh.js';
 import { GameUI } from './ui-game.js';
+import { partStore, zmapState, zmapFromState } from './partstore.js';
+import { ZMap } from '../sim/zmap.js';
 
 const KEY = 'milllab.game';
 const TC = MACHINE.tableCenter;
@@ -62,7 +64,7 @@ export class Game {
     this.mode = null;
     this.op = null; // null | 'pendant' | 'pc'
     this.measuring = false;
-    this.carryPart = null; // finished part snapshot in the player's hands (not persisted)
+    this.carryPart = null; // machined part snapshot in the player's hands (persisted in IndexedDB)
     this.plate = null; // part on the inspection plate { snap, holder, inner, mesh }
     this.report = null; // last inspection report { report, part, snap, time, ... }
     this.timers = { obj: 0, pc: 0, save: 0, sync: 0 };
@@ -94,6 +96,110 @@ export class Game {
     const mode = q === 'sim' || q === 'simulator' ? 'sim' : q === 'workshop' || q === 'game' ? 'workshop' : this.s.mode || 'workshop';
     this.setMode(mode, true);
     window.addEventListener('beforeunload', () => this.save(true));
+    // machined parts live in IndexedDB: write them when the page is hidden or closed (debounced
+    // saves happen after load / unload / program end / feed hold / inspection)
+    const flushAll = () => { this.save(true); this.flushParts(true); };
+    window.addEventListener('pagehide', flushAll);
+    document.addEventListener('visibilitychange', () => { if (document.hidden) flushAll(); });
+  }
+
+  // ------------------------------------------------------------------ machined parts in IndexedDB
+  serSnap(snap) {
+    return { placement: { ...snap.placement }, material: snap.material, blank: { ...snap.blank }, jobId: snap.jobId, complete: !!snap.complete, removed: snap.removed, zmap: zmapState(snap.zmap) };
+  }
+
+  deserSnap(o) {
+    if (!o || !o.zmap) return null;
+    const zmap = zmapFromState(ZMap.prototype, o.zmap);
+    if (!zmap) return null;
+    return { zmap, placement: o.placement, material: o.material, blank: o.blank, jobId: o.jobId, complete: o.complete, removed: o.removed };
+  }
+
+  // keys: 'vise' | 'carry' | 'plate'
+  markParts(...keys) {
+    (this._dirtyParts ||= new Set());
+    for (const k of keys) this._dirtyParts.add(k);
+    clearTimeout(this._partsT);
+    this._partsT = setTimeout(() => this.flushParts(), 400);
+  }
+
+  viseSig() {
+    const app = this.app;
+    return app.stockEmpty ? 'empty' : `${app.stockSerial}|${app.zmap.removedTotal}|${this.machinedSerial === app.stockSerial}|${app.stock.x}x${app.stock.y}x${app.stock.z}${app.stock.material}`;
+  }
+
+  flushParts(all = false) {
+    clearTimeout(this._partsT);
+    const keys = this._dirtyParts || new Set();
+    this._dirtyParts = new Set();
+    if (all) keys.add('vise');
+    const app = this.app;
+    if (keys.has('vise')) {
+      const sig = this.viseSig();
+      if (sig !== this._viseSaved) {
+        this._viseSaved = sig;
+        if (app.stockEmpty || !(app.zmap.removedTotal > 0)) partStore.del('vise');
+        else {
+          partStore.put('vise', {
+            stock: { ...app.stock }, placement: { ...app.placement }, zmap: zmapState(app.zmap),
+            machined: this.machinedSerial === app.stockSerial, jobId: this.s.jobId, savedAt: Date.now(),
+          });
+        }
+      }
+    }
+    if (keys.has('carry')) {
+      if (this.carryPart) partStore.put('carry', this.serSnap(this.carryPart));
+      else partStore.del('carry');
+    }
+    if (keys.has('plate')) {
+      if (this.plate) {
+        const r = this.report;
+        let log = [];
+        try { log = JSON.parse(JSON.stringify(this.ms?.log || r?.log || [])); } catch { /* ignore */ }
+        partStore.put('plate', {
+          snap: this.serSnap(this.plate.snap), partId: this.plate.part.id,
+          report: r && r.snap === this.plate.snap ? { report: r.report, time: r.time, isBest: r.isBest, prevBest: r.prevBest || null, complete: r.complete, log } : null,
+        });
+      } else partStore.del('plate');
+    }
+  }
+
+  // Called once by the app before the first frame: bring back the part in the vise, in the hands and
+  // on the inspection plate. Never throws; gives up after a few seconds (IndexedDB stuck / blocked).
+  async restoreParts() {
+    const work = (async () => {
+      const [vise, carry, plate] = await Promise.all([partStore.get('vise'), partStore.get('carry'), partStore.get('plate')]);
+      const app = this.app;
+      // the vise: only if the blank there is still the one the saved Z-map belongs to
+      if (vise && vise.zmap && !app.stockEmpty) {
+        const st = vise.stock || {};
+        const same = sameBlank(st, app.stock) && st.protrusion === app.stock.protrusion;
+        if (same && app.restoreStockZMap(vise.zmap)) {
+          if (vise.machined) this.machinedSerial = app.stockSerial;
+          this._viseSaved = this.viseSig();
+          app.ui.log(`Restored the part in the vise (${(app.zmap.removedTotal / 1000).toFixed(2)} cm³ machined)`);
+        } else partStore.del('vise');
+      } else if (vise) partStore.del('vise');
+      if (carry && !this.s.carry && !this.carryPart) {
+        const snap = this.deserSnap(carry);
+        if (snap) this.carryPart = snap;
+      } else if (carry) partStore.del('carry');
+      if (plate) {
+        const snap = this.deserSnap(plate.snap);
+        const part = getPart(plate.partId);
+        if (snap && part) {
+          this.showOnPlate(snap, part);
+          if (plate.report) {
+            this.report = { ...plate.report, part, snap, log: plate.report.log || [] };
+            this._msReady?.then(() => { if (this.ms && !this.ms.log.length) { this.ms.part = part; this.ms.log = this.report.log.slice(); } });
+          }
+        }
+      }
+    })().catch((e) => console.warn('Could not restore saved parts:', e));
+    await Promise.race([work, new Promise((r) => setTimeout(r, 4000))]);
+    this.updateHand();
+    this.ui._objKey = '';
+    this.ui.renderObjectives(this.objectives());
   }
 
   // ------------------------------------------------------------------ persistence
@@ -218,6 +324,12 @@ export class Game {
     if (t.save > 5) {
       t.save = 0;
       if (this.mode === 'workshop') this.save();
+      // safety net while cutting: keep the saved part in the vise at most ~20 s behind
+      t.parts = (t.parts || 0) + 1;
+      if (t.parts >= 4) {
+        t.parts = 0;
+        if (!this.app.stockEmpty && this.viseSig() !== this._viseSaved) this.markParts('vise');
+      }
     }
   }
 
@@ -236,10 +348,19 @@ export class Game {
     return this.mode === 'workshop' && (!this.op || this.measuring);
   }
 
-  blockNewBlank() {
+  blankMessage() {
+    return 'In the workshop the blank comes from the stock rack: load it into the vise by hand.';
+  }
+
+  // The control's own stock-changing features (Load blank, New blank, setup wizard, accuracy) would
+  // swap the blank in the vise behind the player's back: in the workshop they are refused.
+  blockStockChange(what) {
     if (this.mode !== 'workshop') return false;
-    this.ui.toast('In the workshop, blanks come from the stock rack: unload the vise and fetch one.', 'warn');
-    this.app.ui.log('Workshop: fetch a blank from the stock rack and clamp it in the vise', 'warn');
+    const msg = what === 'Accuracy'
+      ? 'Accuracy: changing it re-creates the blank, so in the workshop it can only change while the vise is empty or holds an unmachined blank.'
+      : `${what}: ${this.blankMessage()}`;
+    this.app.ui.log(msg, 'warn');
+    this.ui.toast(msg, 'warn', 5000);
     return true;
   }
 
@@ -278,6 +399,7 @@ export class Game {
     if (this._ownRebuild) { this._ownRebuild = false; return; }
     this.s.vise = app.stockEmpty ? null : this.blankFromApp();
     this.save();
+    this.markParts('vise');
   }
 
   rackSlotOf(b) {
@@ -349,6 +471,9 @@ export class Game {
     app.save();
     s.vise = { ...b };
     s.carry = null;
+    this.seenSerial = app.stockSerial;
+    this._ownRebuild = false;
+    this.markParts('vise');
     const job = this.job;
     if (job && fitsPart(b, job) && this.prog) Object.assign(this.prog, { machined: false, unloaded: false, inspected: false });
     app.sound.clunk();
@@ -384,6 +509,7 @@ export class Game {
     }
     app.setStockEmpty(true);
     s.vise = null;
+    this.markParts('vise', 'carry');
     app.sound.clunk();
     this.refreshRack();
     this.updateHand();
@@ -587,12 +713,17 @@ export class Game {
         return;
       }
       this.machinedSerial = app.stockSerial;
+      this.markParts('vise');
       const job = this.job;
       if (job && this.prog && fitsPart(this.s.vise, job)) {
         this.prog.machined = true;
         this.save();
       }
       if (this.mode === 'workshop') this.ui.toast('Program complete. Open the doors and unload the part.', 'ok', 4500);
+    });
+    // a run interrupted by feed hold, an alarm or E-stop leaves a partly machined blank: save it
+    c.on('state', (st) => {
+      if ((st === 'hold' || st === 'alarm' || st === 'estop') && !app.stockEmpty) this.markParts('vise');
     });
     c.on('cycle', (k) => {
       if (k === 'start' && this.mode === 'workshop' && app.stockEmpty) this.ui.toast('The vise is empty: the program will cut air.', 'warn', 4000);
@@ -739,21 +870,8 @@ export class Game {
     if (!snap) return;
     const part = getPart(snap.jobId) || this.job;
     if (!part) return this.ui.toast('Accept a job at the job board first: the inspection compares the part with its drawing.', 'warn', 5000);
-    this.clearPlate();
-    const mesh = new StockMesh(snap.zmap, MATERIALS[snap.material] || MATERIALS.aluminium);
-    const holder = new THREE.Group();
-    holder.name = 'inspection-part';
-    const inner = new THREE.Group();
-    const pl = snap.placement;
-    inner.position.set(-(pl.x0 + pl.lx / 2), -pl.bottom, pl.y0 + pl.ly / 2);
-    inner.add(mesh.group);
-    holder.add(inner);
-    holder.position.copy(this.ws.anchors.inspectionPlate);
-    holder.rotation.y = Math.PI / 2; // part front faces the player standing in front of the bench
-    mesh.group.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-    this.app.viewer.scene.add(holder);
-    holder.updateMatrixWorld(true);
-    this.plate = { snap, holder, inner, mesh, part };
+    this.showOnPlate(snap, part);
+    if (this.ms) this.ms.log = [];
     this.carryPart = null;
     this.updateHand();
     this.app.sound.clunk();
@@ -783,10 +901,30 @@ export class Game {
       p.unloaded = true;
       if (report.grade !== 'FAIL') p.done = true;
     }
-    this.report = { report, part, snap, time, isBest, prevBest: best, complete: report.grade !== 'FAIL' };
+    this.report = { report, part, snap, time, isBest, prevBest: best, complete: report.grade !== 'FAIL', log: [] };
     this.save();
+    this.markParts('carry', 'plate');
     this.ui.openReport(this.report);
     this.ui.toast(report.grade === 'FAIL' ? `Inspection: FAIL (${Math.round(report.score)})` : `Inspection: grade ${report.grade} (${Math.round(report.score)}/100)`, report.grade === 'FAIL' ? 'warn' : 'ok', 4000);
+  }
+
+  // Show a part snapshot on the granite plate (partGroup for the measuring station = inner).
+  showOnPlate(snap, part) {
+    this.clearPlate();
+    const mesh = new StockMesh(snap.zmap, MATERIALS[snap.material] || MATERIALS.aluminium);
+    const holder = new THREE.Group();
+    holder.name = 'inspection-part';
+    const inner = new THREE.Group();
+    const pl = snap.placement;
+    inner.position.set(-(pl.x0 + pl.lx / 2), -pl.bottom, pl.y0 + pl.ly / 2);
+    inner.add(mesh.group);
+    holder.add(inner);
+    holder.position.copy(this.ws.anchors.inspectionPlate);
+    holder.rotation.y = Math.PI / 2; // part front faces the player standing in front of the bench
+    mesh.group.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    this.app.viewer.scene.add(holder);
+    holder.updateMatrixWorld(true);
+    this.plate = { snap, holder, inner, mesh, part };
   }
 
   clearPlate() {
@@ -826,6 +964,7 @@ export class Game {
     this.ms.onMeasure = (rec) => {
       this.app.sound.click?.();
       if (this.report) this.report.log = this.ms.log;
+      this.markParts('plate');
     };
     this.ms.onSelect = (id) => {
       for (const p of this.instruments) p.visible = p.userData.id !== id;
@@ -856,6 +995,7 @@ export class Game {
     if (this.ms?.active) this.ms.close();
     for (const p of this.instruments || []) p.visible = true;
     if (this.report) this.report.log = this.ms?.log || [];
+    this.markParts('plate');
     this.fp.frozen = false;
     this.updateHand();
     this.ui.syncHud();
