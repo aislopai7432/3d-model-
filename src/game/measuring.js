@@ -1034,6 +1034,31 @@ export function buildInstrumentModel(id, opts = {}) {
   return g;
 }
 
+// Bench prop: the instrument laid out in the workshop's instrument-slot frame (+X along the tray,
+// +Y up, +Z toward the user), origin at the resting point (bottom centre of its bounding box).
+// caliper / micrometer / boreGauge / depthMic / dialIndicator lie flat (readout facing up, jaws / frame
+// toward the user); heightGauge stands upright on its base. Just copy the slot position/quaternion
+// onto the returned group. The articulated model is group.userData.model.
+export function buildInstrumentProp(id, opts = {}) {
+  const model = opts.model || buildInstrumentModel(id, opts);
+  const wrap = new THREE.Group();
+  wrap.name = `prop-${id}`;
+  const inner = new THREE.Group();
+  inner.add(model);
+  if (id === 'boreGauge') inner.quaternion.setFromEuler(new THREE.Euler(-Math.PI / 2, 0, -Math.PI / 2, 'XYZ')); // shaft along +X, dial up
+  else if (id !== 'heightGauge') inner.rotation.x = -Math.PI / 2; // model +Z (readout) up, model -Y toward the user
+  if (id === 'heightGauge') model.userData.setValue?.(60);
+  if (id === 'dialIndicator') model.userData.setHeight?.(60);
+  wrap.add(inner);
+  inner.updateMatrixWorld(true);
+  const b = new THREE.Box3().setFromObject(inner);
+  const c = b.getCenter(new THREE.Vector3());
+  inner.position.set(-c.x, -b.min.y, -c.z);
+  wrap.userData = { id, model, size: b.getSize(new THREE.Vector3()) };
+  model.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  return wrap;
+}
+
 // =================================================================== UI
 const ICONS = {
   caliper: '<path d="M3 6h18v3H3zM4 9v9l2.5 2V9M10 9v8l-2 3V9M4 6V3l2 0v3M10 6V3.5L8.5 3V6" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><rect x="10" y="9.5" width="7" height="4" rx="1" fill="currentColor" opacity=".55"/>',
@@ -1154,6 +1179,7 @@ export class MeasuringStation {
     this.manageCamera = manageCamera;
     this.onClose = () => {};
     this.onMeasure = () => {};
+    this.onSelect = () => {}; // (instrumentId) => {}: e.g. hide that instrument's bench prop while in use
     this.log = [];
     this._active = false;
     this.sel = 'caliper';
@@ -1385,6 +1411,7 @@ export class MeasuringStation {
     this._renderChips();
     this._renderHint();
     this._renderReading();
+    try { this.onSelect(id); } catch (e) { console.error(e); }
   }
 
   _range(id = this.sel) {
