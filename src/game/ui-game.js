@@ -424,7 +424,7 @@ export class GameUI {
           <dt>Material</dt><dd><i class="g-sw" style="${swatch(part.material)}"></i>${esc(MATERIALS[part.material]?.name || part.material)}</dd>
           <dt>Blank</dt><dd>${part.stock.x} × ${part.stock.y} × ${part.stock.z} mm</dd>
           <dt>Finished</dt><dd>${part.size.x} × ${part.size.y} × ${part.size.z} mm</dd>
-          <dt>Features</dt><dd>${feats} (balloons A–${String.fromCharCode(64 + feats)})</dd>
+          <dt>Features</dt><dd>${feats} (balloon${feats > 1 ? `s A–${String.fromCharCode(64 + feats)}` : ' A'})</dd>
           <dt>Tolerance</dt><dd>±${part.tol?.general ?? 0.1} mm unless stated</dd>
           ${best ? `<dt>Best</dt><dd><i class="g-grade-s g-${best.grade}">${best.grade}</i> ${best.score}/100${best.time != null ? ' · ' + fmtClock(best.time) : ''}</dd>` : ''}
         </dl>

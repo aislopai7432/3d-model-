@@ -13,6 +13,45 @@ There is no build step and nothing to install. Three.js 0.160 loads from jsDeliv
 
 > MillLab is an independent training simulator. Its operating concept follows the SINUMERIK 808D for learning purposes, but it is not Siemens software and is not affiliated with or endorsed by Siemens AG. SINUMERIK is a trademark of Siemens AG. Always check programs against the official documentation before running them on a real machine.
 
+## Two modes: the workshop game and the simulator
+
+The top bar switches between two modes. The app remembers the last one; `?mode=workshop` or `?mode=sim` in the URL picks one.
+
+- **Workshop** (the default) is a first-person game in a machine shop around the VMC. You read engineering drawings, take a block of metal from the stock rack, clamp it in the vise, program and run the part at the machine's control panel, then inspect and measure what you made.
+- **Simulator** is the full desktop simulator: orbit camera, the control docked on the right and the machine control panel along the bottom. The workshop stays around the machine as the background; walls and roof are cut away when the camera is outside the building.
+
+Both modes drive the same machine, control, programs and blank. A part half-made in one mode is still in the vise in the other.
+
+### Workshop controls
+
+| Input | Action |
+|---|---|
+| Click the view | Capture the mouse to look around (Esc releases it) |
+| W A S D or arrows | Walk; Shift runs, C or Ctrl crouches, Space hops |
+| E or left click | Use what the crosshair points at (the prompt says what) |
+| Q (or Tab) | Open the current drawing; in the operator view, show or hide the pinned drawing |
+| J | Job list |
+| H | Controls card |
+| Esc | Close the top-most window, leave the measuring station, or step back from the control panel |
+
+On a touch screen the left thumb walks (virtual joystick), the right thumb looks around, and tapping the prompt uses the object.
+
+### The job flow
+
+1. **Job board** (cork board on the left wall). Ten drawings are pinned there, P01 to P10, with difficulty one to five stars in aluminium, acetal, brass and steel. Choose one to open the **drawing viewer**: a full ISO-style A3 sheet you can zoom with the wheel or a pinch and pan by dragging. The side panel shows the customer brief, material, blank and finished sizes, tolerances and the **setup note** (G54 on the top front-left corner of the raw blank, Z0 = top of the blank). *Accept job* creates `JOB_Pxx.MPF` with a header template and selects it. *Load reference program* writes a worked solution to `JOB_Pxx_REF.MPF` (after a confirmation).
+2. **Stock rack** (right wall). Pick the blank the drawing's title block calls for. Near misses (wrong height, wrong material) are on the shelf too. Taking a wrong blank is allowed, but the inspection fails it. The blank is shown in your hand and in the *Carrying* chip.
+3. **Vise.** Open the doors with a door handle, then use the vise to clamp the blank. The spindle must be stopped and no program running. Loading and unloading only work with the doors open.
+4. **Control panel** (the pendant). Using it opens the **operator view**: the real 808D-style screen with its softkeys docked on the right, the machine control panel along the bottom and the drawing pinned on the left. The panel can be resized or hidden. Everything the simulator can do works here: JOG, MDA, AUTO, work offsets, cycle forms, the contour designer, the editor and CYCLE START. The machine stays visible in the middle. Esc or *Step back* returns to walking.
+5. **CAM computer** (left wall). This opens the same control straight in the PROGRAM area for offline programming, without the machine control panel. Its monitor shows the current program and a sketch of the toolpath.
+6. **Tool crib.** Lists the tools in the magazine (T numbers, diameters, lengths), with a shortcut to OFFSET › Tool list.
+7. **Unload** the finished part (doors open), carry it to the **inspection bench** and use the granite surface plate. The part is set on the plate and inspected against the drawing. The **inspection report** shows a grade (A to D or FAIL), a score, each characteristic (nominal, measured, tolerance, OK or NOT OK), notes, and a deviation map: green is within tolerance, blue is material left, red is too deep. The best grade, score and time per job are saved.
+
+The **objectives card** (top left) ticks itself from the real machine state. Its steps are: read the drawing, take the right blank, load it, set G54 (within 0.05 mm of the expected corner), select a program that compiles, machine the part in AUTO, unload it and inspect it. Progress is stored in the browser under `milllab.game`. A machined part that is not yet inspected is lost on reload; raw blanks in the vise or in your hands are kept.
+
+### Measuring instruments
+
+The foam tray on the inspection bench holds a **digital caliper** (outside jaws, inside jaws and depth rod; 0.01 mm), an **outside micrometer** (0–25 to 100–125 mm frames, 0.001 mm), a **dial bore gauge** (18–35, 35–60 and 50–160 mm heads), a **depth micrometer**, a **dial indicator** for flatness sweeps, and a **height gauge** standing on the plate. Use *Measure the part* in the report, or an instrument on the tray, to open the measuring station. Pick an instrument and click the faces to measure. The readings come from the actual machined Z-map, not from the drawing, with each instrument's resolution, range and a little noise. They go on your measurement sheet, which is also shown in the inspection report.
+
 ## Running locally
 
 ES modules do not load from `file://`, so serve the folder:
@@ -191,7 +230,11 @@ In the 3D view, drag to orbit, right-drag or Shift-drag to pan, and scroll to zo
 | `src/gcode/examples808.js`, `examples.js` | Example programs (Siemens mode and generated ISO) |
 | `src/sim/controller.js` | Channel: modes, AUTO/MDA/JOG execution, single block, program control, tool change sequence, referencing, interlocks, alarms |
 | `src/sim/zmap.js`, `tooling.js` | Z-map material removal and cutter profiles |
-| `src/scene/*` | Machine model, tools, stock mesh, vise, toolpath, effects, renderer |
+| `src/scene/*` | Machine model, tools, stock mesh, vise, toolpath, effects, renderer; `workshop.js` builds the machine shop |
+| `src/game/game.js`, `ui-game.js`, `drawview.js` | Workshop game: modes, first-person interactions, job flow, objectives, persistence, HUD and overlays, drawing pan/zoom |
+| `src/game/fps.js` | First-person controller (pointer lock, WASD, collisions, touch joystick, interaction prompt) |
+| `src/game/parts.js`, `inspect.js`, `drawing.js` | Job drawings (part definitions and reference programs), inspection against the drawing, ISO drawing sheets |
+| `src/game/measuring.js`, `gauges.js` | Measuring instruments: 3D models, readouts, the measuring station and the measurement maths |
 | `src/ui/hmi.js` | Operating areas, pages and softkeys |
 | `src/ui/ui.js` | MCP, keyboard, program manager operations, tool editing, wizard |
 | `src/ui/cycleforms.js`, `contour.js`, `programs.js`, `editor.js` | Cycle input screens, contour designer, NC program memory and the editor |
