@@ -585,7 +585,7 @@ class App {
 
   // ------------------------------------------------------------------ frame
   frame(now) {
-    const dt = Math.min(0.1, (now - this.last) / 1000);
+    const dt = Math.max(0, Math.min(0.1, (now - this.last) / 1000));
     this.last = now;
     const c = this.controller;
     this.stats.removedFrame = 0;

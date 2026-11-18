@@ -88,7 +88,7 @@ export class Game {
     this.bindController();
     this.fillRack();
     this.fillJobBoard();
-    this.loadMeasuring();
+    this._msReady = this.loadMeasuring();
 
     const q = new URLSearchParams(location.search).get('mode');
     const mode = q === 'sim' || q === 'simulator' ? 'sim' : q === 'workshop' || q === 'game' ? 'workshop' : this.s.mode || 'workshop';
@@ -164,6 +164,7 @@ export class Game {
         ui.log('Simulator: blank loaded into the empty vise');
       }
       this.ui.showHelp(false);
+      ui.update(true);
     }
     this.ui.syncMode();
     this.hand.visible = false;
@@ -191,6 +192,7 @@ export class Game {
   }
 
   update(dt) {
+    if (!(dt > 0)) dt = 0;
     if (this.mode === 'workshop') {
       const p = this.prog;
       if (p && !p.done && !document.hidden) p.time = (p.time || 0) + dt;
@@ -396,14 +398,12 @@ export class Game {
     hand.position.set(170, -175, -430);
     hand.rotation.set(0.32, -0.5, 0.05);
     cam.add(hand);
-    const mat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 0.85, roughness: 0.4, depthTest: false, depthWrite: false });
+    // convex box with back-face culling: drawn last without depth test so it never clips into walls
+    const mat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 0.85, roughness: 0.4, depthTest: false, depthWrite: false, envMapIntensity: 1.2 });
     const block = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat);
     block.renderOrder = 1000;
     block.frustumCulled = false;
     hand.add(block);
-    const light = new THREE.PointLight(0xffffff, 0.6, 900, 0);
-    light.position.set(-120, 220, 180);
-    hand.add(light);
     this.hand = hand;
     this.handBlock = block;
     this.handPart = null;
@@ -834,7 +834,8 @@ export class Game {
 
   async openMeasuring(instrument) {
     if (!this.plate) return this.ui.toast('Put a machined part on the surface plate first.', 'info');
-    if (!this.ms) return this.ui.toast('The measuring instruments are still loading.', 'warn');
+    if (!this.ms) await this._msReady;
+    if (!this.ms) return this.ui.toast('The measuring instruments are not available.', 'warn');
     if (this.mode !== 'workshop') return;
     this.ui.closeAll();
     this.measuring = true;

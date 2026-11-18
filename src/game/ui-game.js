@@ -196,6 +196,8 @@ export class GameUI {
     if (e.key === 'Escape') {
       if (g.measuring) return; // the measuring station handles its own Esc
       if (this.topModal()) { e.preventDefault(); this.closeTop(); return; }
+      const hm = $('#helpModal'), wz = $('#wizard');
+      if (!hm.hidden || !wz.hidden) { hm.hidden = true; wz.hidden = true; return; }
       if (g.op) {
         e.preventDefault();
         if (typing) e.target.blur();
@@ -399,6 +401,7 @@ export class GameUI {
           <div class="g-job-t"><b>${esc(p.id)}</b><span>${esc(p.title)}</span>${cur ? '<em>Current</em>' : ''}${best ? `<i class="g-grade-s g-${best.grade}" title="Best grade">${best.grade}</i>` : ''}</div>
           <div class="g-job-m">${stars(p.difficulty)}<span><i class="g-sw" style="${swatch(p.material)}"></i>${esc(matShort(p.material))}</span><span>Blank ${p.stock.x}×${p.stock.y}×${p.stock.z}</span></div>
           <p>${esc(p.brief)}</p>
+          <div class="g-job-s"><b>Setup</b> ${esc((p.setupNote || 'G54 on the top front-left corner of the raw blank, Z0 = top of the blank').split('. ')[0])}</div>
           <div class="g-job-c">${esc(p.customer)} · ${esc(p.drawingNo)} rev ${esc(p.rev)}${best ? ` · best ${best.score}/100${best.time != null ? ' in ' + fmtClock(best.time) : ''}` : ''}</div>
         </div></button>`;
     }).join('');
@@ -517,7 +520,13 @@ export class GameUI {
     const s = r.summary || {};
     const rows = (r.items || []).map((it) => `<tr class="${it.pass ? '' : 'bad'}"><td>${esc(it.label)}</td><td>${fmtN(it.nominal)}</td><td>${it.missing ? 'missing' : fmtN(it.measured)}</td><td>±${fmtN(it.tol, 2)}</td><td class="st">${it.pass ? 'OK' : 'NOT OK'}</td></tr>`).join('');
     const log = (rec.log || g.ms?.log || []).filter(Boolean);
-    const logRows = log.map((l) => `<tr><td>${esc(l.instrument || '')}</td><td>${esc(l.what || '')}</td><td>${typeof l.value === 'number' ? l.value.toFixed(l.unit === 'mm' && Math.abs(l.value) < 1000 ? 3 : 2) : esc(l.value)} ${esc(l.unit || '')}</td><td>${l.nominal != null ? fmtN(l.nominal) : '—'}</td></tr>`).join('');
+    const dec = (res) => (res > 0 ? Math.max(0, Math.min(4, Math.round(-Math.log10(res)))) : 3);
+    const logRows = log.map((l) => {
+      const dev = l.nominal != null && typeof l.value === 'number' ? l.value - l.nominal : null;
+      const tol = l.tol ?? l.tolDefault;
+      const bad = dev != null && tol != null && Math.abs(dev) > tol + 1e-9;
+      return `<tr class="${bad ? 'bad' : ''}"><td>${esc(l.instrumentName || l.instrument || '')}</td><td>${esc(l.what || '')}</td><td>${typeof l.value === 'number' ? l.value.toFixed(dec(l.resolution)) : esc(l.value)} ${esc(l.unit || '')}</td><td>${l.nominal != null ? fmtN(l.nominal) : '—'}${dev != null ? ` (${dev >= 0 ? '+' : ''}${dev.toFixed(dec(l.resolution))})` : ''}</td></tr>`;
+    }).join('');
     const banner = rec.complete
       ? `<div class="g-complete">${ICON.check}<div><b>Job complete${rec.time != null ? ` in ${fmtClock(rec.time)}` : ''}</b><span>${rec.isBest ? (rec.prevBest ? `New best (was ${rec.prevBest.grade} ${rec.prevBest.score}).` : 'First completion of this job.') : `Best so far: ${g.s.jobs[part.id]?.best?.grade} ${g.s.jobs[part.id]?.best?.score}.`} Measure the part with the instruments, or pick the next job.</span></div></div>`
       : `<div class="g-complete fail"><div><b>Not accepted</b><span>Fix the program or the setup and machine a new blank. ${s.wrongBlank ? 'Wrong blank: check the drawing’s blank size.' : s.notMachined ? 'The part was not machined.' : ''}</span></div></div>`;
@@ -537,8 +546,8 @@ export class GameUI {
         ${(r.notes || []).length ? `<ul class="g-notes">${r.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}
         <div class="g-table-wrap"><table class="g-table"><thead><tr><th>Characteristic</th><th>Nominal</th><th>Measured</th><th>Tol.</th><th>Result</th></tr></thead><tbody>${rows || '<tr><td colspan="5">No measurable features</td></tr>'}</tbody></table></div>
         <h4 class="g-h4">Your measurements</h4>
-        ${logRows ? `<div class="g-table-wrap"><table class="g-table"><thead><tr><th>Instrument</th><th>What</th><th>Reading</th><th>Nominal</th></tr></thead><tbody>${logRows}</tbody></table></div>` : '<p class="g-hint">None yet. Use the calipers, micrometer, bore gauge, depth micrometer, height gauge and dial indicator on the bench to check the part yourself.</p>'}`,
-      foot: `<button class="btn" data-rp="jobs">Job board</button><button class="btn primary" data-rp="measure"${g.ms ? '' : ' disabled title="Instruments still loading"'}>Measure the part</button>`,
+        ${logRows ? `<div class="g-table-wrap"><table class="g-table"><thead><tr><th>Instrument</th><th>What</th><th>Reading</th><th>Nominal (dev.)</th></tr></thead><tbody>${logRows}</tbody></table></div>` : '<p class="g-hint">None yet. Use the calipers, micrometer, bore gauge, depth micrometer, height gauge and dial indicator on the bench to check the part yourself.</p>'}`,
+      foot: `<button class="btn" data-rp="jobs">Job board</button><button class="btn primary" data-rp="measure">Measure the part</button>`,
     });
     this.drawDeviation($('.g-devmap canvas', m.el), r, part);
     m.el.addEventListener('click', (e) => {
