@@ -97,7 +97,7 @@ export function drawLCD(ctx, x, y, w, h, text, { unit = 'mm', note = '', err = f
   ctx.lineWidth = Math.max(1, h * 0.03);
   ctx.stroke();
   const dh = h * 0.6;
-  draw7Seg(ctx, text, x + w - w * 0.2, y + h * 0.2, dh, err ? '#5a1c14' : '#1b2116', 'rgba(30,40,20,.07)', 6);
+  draw7Seg(ctx, text, x + w - w * 0.2, y + h * 0.2, dh, err ? '#5a1c14' : '#1b2116', 'rgba(30,40,20,.05)', 6);
   ctx.fillStyle = '#1b2116';
   ctx.font = `700 ${Math.round(h * 0.17)}px Arial, sans-serif`;
   ctx.textAlign = 'left';
@@ -113,8 +113,8 @@ export function drawLCD(ctx, x, y, w, h, text, { unit = 'mm', note = '', err = f
 // value: reading; min: range start; res 0.001 draws the vernier on the sleeve.
 export function drawMicrometerScale(ctx, W, H, value, { min = 0, vernier = true, title = '' } = {}) {
   const r = clamp(value - min, 0, 25.5);
-  const refY = Math.round(H * 0.66), ppm = 30, pd = 8.2;
-  const xe = Math.round(W * 0.6);
+  const refY = Math.round(H * 0.64), ppm = 34, pd = 8;
+  const xe = Math.round(W * 0.56);
   ctx.save();
   ctx.fillStyle = '#121518';
   ctx.fillRect(0, 0, W, H);
@@ -131,7 +131,7 @@ export function drawMicrometerScale(ctx, W, H, value, { min = 0, vernier = true,
   ctx.moveTo(0, refY + 0.5);
   ctx.lineTo(xe, refY + 0.5);
   ctx.stroke();
-  ctx.font = '600 15px Arial, sans-serif';
+  ctx.font = '700 19px Arial, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
   for (let k = 0; k <= 50; k++) {
@@ -157,7 +157,7 @@ export function drawMicrometerScale(ctx, W, H, value, { min = 0, vernier = true,
   const m = 6;
   if (vernier) {
     ctx.lineWidth = 1.3;
-    ctx.font = '600 12px Arial, sans-serif';
+    ctx.font = '700 14px Arial, sans-serif';
     ctx.textAlign = 'right';
     for (let i = 0; i <= 10; i++) {
       const y = Math.round(refY - (m + 0.9 * i) * pd) + 0.5;
@@ -198,7 +198,7 @@ export function drawMicrometerScale(ctx, W, H, value, { min = 0, vernier = true,
   ctx.strokeStyle = '#15181b';
   ctx.fillStyle = '#15181b';
   ctx.lineWidth = 1.5;
-  ctx.font = '600 15px Arial, sans-serif';
+  ctx.font = '700 18px Arial, sans-serif';
   ctx.textAlign = 'left';
   const k0 = Math.floor(div) - 25, k1 = Math.ceil(div) + 25;
   for (let k = k0; k <= k1; k++) {
@@ -226,7 +226,10 @@ export function drawMicrometerScale(ctx, W, H, value, { min = 0, vernier = true,
   ctx.fillRect(xe, tBot - 40, W - xe, 40);
   if (title) {
     ctx.fillStyle = 'rgba(255,255,255,.55)';
-    ctx.font = '600 11px Arial, sans-serif';
+    ctx.fillStyle = 'rgba(13,15,17,.75)';
+    ctx.fillRect(0, 0, W, 24);
+    ctx.fillStyle = 'rgba(255,255,255,.7)';
+    ctx.font = '700 13px Arial, sans-serif';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
     ctx.fillText(title, 8, 6);
@@ -1228,7 +1231,7 @@ export class MeasuringStation {
     if (this.manageCamera && this.camera) {
       this._savedCam = { pos: this.camera.position.clone(), quat: this.camera.quaternion.clone(), up: this.camera.up.clone() };
       const S = this.frame.size;
-      this.orbit = { yaw: -0.42, pitch: 0.62, dist: Math.max(S.x, S.y) * 1.9 + 230 };
+      this.orbit = { yaw: -0.42, pitch: 0.7, dist: Math.max(S.x, S.y) * 1.7 + 190 };
       this._applyCamera();
     }
     this.select(instrument || this.sel, true);
@@ -1359,7 +1362,7 @@ export class MeasuringStation {
     zoom.addEventListener('click', (e) => {
       const z = e.target.closest('button')?.dataset.z;
       if (z == null || !this.orbit) return;
-      if (z === '0') Object.assign(this.orbit, { yaw: -0.42, pitch: 0.62, dist: Math.max(this.frame.size.x, this.frame.size.y) * 1.9 + 230 });
+      if (z === '0') Object.assign(this.orbit, { yaw: -0.42, pitch: 0.7, dist: Math.max(this.frame.size.x, this.frame.size.y) * 1.7 + 190 });
       else this.orbit.dist *= z === '1' ? 1.2 : 1 / 1.2;
       this._applyCamera();
     });
@@ -1443,7 +1446,8 @@ export class MeasuringStation {
     const id = this.sel;
     let H = HINTS[id];
     if (id === 'caliper') H = H[this.mode.caliper];
-    this.ui.hint.innerHTML = H[Math.min(this.clicks.length, H.length - 1)];
+    const need = id === 'micrometer' || id === 'depthMic' || (id === 'caliper' && this.mode.caliper !== 'inside') ? 2 : 1;
+    this.ui.hint.innerHTML = this.clicks.length >= need ? H[0] : H[Math.min(this.clicks.length, H.length - 1)];
   }
 
   _renderReading() {
@@ -1472,15 +1476,15 @@ export class MeasuringStation {
       drawLCD(ctx, 30, 50, 700, 180, ok ? formatValue(val, res) : r ? '-E-' : '0.00', { unit: 'mm', note: id === 'caliper' ? this.mode.caliper.toUpperCase() : 'ABS', err: !!(r && !ok) });
       showBig = false;
     } else if (id === 'micrometer' || id === 'depthMic') {
-      cv.width = 760; cv.height = 330;
+      cv.width = 560; cv.height = 300;
       const rg = id === 'micrometer' ? rng : (ok && r.rod) || [0, 25];
       const v = ok ? val : rg[0];
-      drawMicrometerScale(ctx, 760, 330, v, { min: rg[0], vernier: id === 'micrometer', title: id === 'micrometer' ? `SLEEVE ${rg[0]}-${rg[1]} mm  ·  THIMBLE 0.01  ·  VERNIER 0.001` : `DEPTH MICROMETER  ·  ROD ${rg[0]}-${rg[1]} mm  ·  0.01` });
+      drawMicrometerScale(ctx, 560, 300, v, { min: rg[0], vernier: id === 'micrometer', title: id === 'micrometer' ? `SLEEVE ${rg[0]}-${rg[1]} mm  ·  THIMBLE 0.01  ·  VERNIER 0.001` : `DEPTH MICROMETER  ·  ROD ${rg[0]}-${rg[1]} mm  ·  0.01` });
       const lab = h('label', '', `<input type="checkbox" ${this.showValue[id] ? 'checked' : ''}> Show value`);
       lab.querySelector('input').addEventListener('change', (e) => { this.showValue[id] = e.target.checked; this._renderReading(); });
       U.opt.appendChild(lab);
       if (!this.showValue[id] && ok) {
-        U.big.innerHTML = '<span style="color:#86919d;font-size:15px">Read the scale (sleeve + thimble' + (id === 'micrometer' ? ' + vernier' : '') + ')</span>';
+        U.big.innerHTML = '<span style="color:#86919d;font:500 13px var(--f-ui,system-ui)">Read the scale: sleeve + thimble' + (id === 'micrometer' ? ' + vernier' : '') + ' (or tick "Show value")</span>';
         showBig = null;
       }
     } else if (id === 'boreGauge' || id === 'dialIndicator') {
@@ -1708,20 +1712,26 @@ export class MeasuringStation {
   // snap a click on a wall/top into the cavity next to it (for inside / bore)
   _intoCavity(c) {
     const F = this.frame;
-    if (!c.onTop || c.h > -0.05) {
-      let best = null;
-      for (const r of [0.8, 1.6, 3]) {
-        for (let k = 0; k < 16; k++) {
-          const a = (k / 16) * TAU;
-          const x = c.x + Math.cos(a) * r, y = c.y + Math.sin(a) * r;
-          const v = F.H(x, y);
-          if (Number.isFinite(v) && v < c.z - 0.3 && (!best || v < best.v)) best = { x, y, v };
-        }
-        if (best) break;
-      }
-      if (best) return { x: best.x, y: best.y };
+    if (c.onTop && c.h <= -0.05) return { x: c.x, y: c.y };
+    // clicked a wall or the rim: find the downhill direction and walk onto the floor plateau
+    let dir = null, lo = Infinity;
+    for (let k = 0; k < 24; k++) {
+      const a = (k / 24) * TAU;
+      const v = F.H(c.x + Math.cos(a) * 1.5, c.y + Math.sin(a) * 1.5);
+      if (Number.isFinite(v) && v < lo) { lo = v; dir = [Math.cos(a), Math.sin(a)]; }
     }
-    return { x: c.x, y: c.y };
+    if (!dir || lo >= (Number.isFinite(c.h) ? c.h : c.z) - 0.3) return { x: c.x, y: c.y };
+    let bestT = 1.5, bestH = lo;
+    for (let t = 0.25; t <= 8; t += 0.25) {
+      const v = F.H(c.x + dir[0] * t, c.y + dir[1] * t);
+      if (!Number.isFinite(v)) break;
+      if (v < bestH - 0.02) { bestH = v; bestT = t; }
+      else if (v > bestH + 0.3) break;
+    }
+    const t = bestT + 1.2;
+    const v = F.H(c.x + dir[0] * t, c.y + dir[1] * t);
+    const tt = Number.isFinite(v) && v <= bestH + 0.02 ? t : bestT;
+    return { x: c.x + dir[0] * tt, y: c.y + dir[1] * tt };
   }
   _levelOf(c) {
     const F = this.frame;
@@ -1791,7 +1801,7 @@ export class MeasuringStation {
     if (r.ok && kind === 'bore') r.sub = `roundness ${r.roundness.toFixed(3)} · centre X${r.centre.x.toFixed(2)} Y${r.centre.y.toFixed(2)}`;
     if (r.ok && kind === 'depth' && r.rod) r.sub = `rod ${r.rod[0]}-${r.rod[1]} mm`;
     if (r.ok && kind === 'flatness') r.sub = `swept ${r.path[0].length + r.path[1].length} points along X and Y`;
-    if (r.ok && kind === 'outside') r.sub = `walls at ${r.axis === 'X' ? 'X' : 'Y'} ${(r.axis === 'X' ? [r.wall1.x, r.wall2.x] : [r.wall1.y, r.wall2.y]).map((v) => v.toFixed(2)).join(' / ')}`;
+    if (r.ok && kind === 'outside') r.sub = `walls at ${r.axis === 'X' ? 'X' : 'Y'} ${(r.axis === 'X' ? [r.wall1.x, r.wall2.x] : [r.wall1.y, r.wall2.y]).map((v) => (Math.abs(v) < 0.005 ? 0 : v).toFixed(2)).join(' / ')}`;
     this.lastResult = r;
     if (r.ok) {
       const ins = INSTRUMENT[id];
@@ -1887,7 +1897,7 @@ export class MeasuringStation {
     switch (id) {
       case 'caliper': return { pose: { p: { x: S.x / 2 - 105, y: -48, z: b + 3.45 }, x: X, y: Y }, value: 22 };
       case 'micrometer': { const G = this._range('micrometer')[1]; return { pose: { p: { x: S.x / 2 - G / 2, y: -26, z: b + 7 }, x: X, y: Y }, value: this._range('micrometer')[0] + 3 }; }
-      case 'boreGauge': return { pose: { p: { x: S.x + 230, y: -30, z: b + 9.4 }, x: [0, 1, 0], y: [-1, 0, 0] }, value: (this._range('boreGauge')[0] + this._range('boreGauge')[1]) / 2 };
+      case 'boreGauge': return { pose: { p: { x: S.x + 330, y: -95, z: b + 9.4 }, x: [0, 1, 0], y: [-1, 0, 0] }, value: (this._range('boreGauge')[0] + this._range('boreGauge')[1]) / 2 };
       case 'depthMic': return { pose: { p: { x: S.x + 45, y: S.y * 0.35, z: b }, x: X, y: Z }, value: 6 };
       case 'heightGauge': return { pose: { p: { x: S.x + 70, y: S.y * 0.3, z: b }, x: X, y: Z }, value: S.z + 15 };
       case 'dialIndicator': return { pose: { p: { x: -175, y: S.y * 0.3, z: b }, x: X, y: Z }, value: 0, height: S.z + 12 };
