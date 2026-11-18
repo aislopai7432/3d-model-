@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
-<title>MillLab 808D Simulator</title>
+<title>MillLab: CNC Workshop and 808D Simulator</title>
 <meta name="description" content="A 3-axis CNC milling simulator with an 808D-style control: Siemens-mode G-code with cycles, R parameters and cutter compensation, ISO dialect, Z-map material removal and an industrial operator panel.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -31,6 +31,10 @@
       <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="3" width="26" height="26" rx="6" fill="#1d2a3a" stroke="#3d8bfd" stroke-width="1.5"/><path d="M11 8v11l5 5 5-5V8" fill="none" stroke="#e6edf5" stroke-width="2.2" stroke-linejoin="round"/><path d="M16 13v11" stroke="#3d8bfd" stroke-width="2.2"/></svg>
       <div class="brand-text"><b>MillLab</b><span>VMC-560 · 808D-style control</span></div>
     </div>
+    <div class="seg mode-seg" id="modeSeg" role="tablist" aria-label="Mode">
+      <button data-gmode="workshop" role="tab" title="First-person workshop game"><svg viewBox="0 0 24 24"><path d="M3 20V9l9-5 9 5v11" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M8 20v-6h8v6" fill="none" stroke="currentColor" stroke-width="1.9"/></svg><span>Workshop</span></button><button data-gmode="sim" role="tab" title="Simulator: orbit view and the full control"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M9 20h6M12 16.5V20" stroke="currentColor" stroke-width="1.9"/></svg><span>Simulator</span></button>
+    </div>
+    <button class="job-chip" id="jobChip" title="Current job: open the drawing" hidden></button>
     <div class="prog-chip" title="Program selected for AUTO"><span class="lbl">PROGRAM</span><span id="progName">—</span></div>
     <div class="state-pill" id="statePill" data-state="idle"><i></i><span id="stateText">RESET</span></div>
     <div class="top-actions">
