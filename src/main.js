@@ -19,6 +19,8 @@ import { Toolpath } from './scene/toolpath.js';
 import { Effects, makeSurfaceFn } from './scene/effects.js';
 import { Sound } from './audio/sound.js';
 import { UI } from './ui/ui.js';
+import { buildWorkshop } from './scene/workshop.js';
+import { Game } from './game/game.js';
 
 const STORE = 'milllab.v1';
 const $ = (s) => document.querySelector(s);
@@ -56,6 +58,8 @@ class App {
     this.measurePts = [];
     this.measureOn = false;
     this.lastCollisionLog = 0;
+    this.stockEmpty = false; // workshop game: the vise can be empty (no blank loaded)
+    this.stockSerial = 0; // bumped by every rebuildStock()
   }
 
   async init() {
@@ -75,7 +79,10 @@ class App {
     this.machine.workGroup.add(this.wcsMarker);
     this.effects = new Effects(this.viewer.scene, this.machine.workGroup);
     this.effects.attachBlur(this.machine.head);
-    this.surfaceAt = makeSurfaceFn(this);
+    // chips land on the stock only while there is one in the vise
+    const app = this;
+    const surf = makeSurfaceFn({ get zmap() { return app.stockEmpty ? null : app.zmap; }, get placement() { return app.placement; } });
+    this.surfaceAt = surf;
     this.sound = new Sound();
     this.sound.volume = this.settings.volume;
     this.sound.muted = this.settings.muted;
@@ -104,6 +111,16 @@ class App {
     else this.loadExample808('sie-full', true);
     this.ui.init();
     this.applyVisualSettings();
+    this.ui.loading('Building the workshop…');
+    await nextFrame();
+    // the machine shop around the VMC: always the 3D background (simulator and workshop modes)
+    this.workshop = buildWorkshop({ camera: this.viewer.camera });
+    this.viewer.scene.add(this.workshop.group);
+    const floor = this.machine.root.getObjectByName('floor');
+    if (floor) floor.visible = false;
+    this.viewer.scene.fog = new THREE.Fog(0x9aa0a6, 16000, 34000);
+    this.game = new Game(this);
+    window.__game = this.game;
     this.ui.loading(null);
     this.last = performance.now();
     this.uiTimer = 0;
@@ -160,9 +177,11 @@ class App {
       this.machine.workGroup.remove(this.stockMesh.group);
       this.stockMesh.dispose();
     }
+    this.stockSerial++;
     this.zmap = new ZMap({ x0: pl.x0, y0: pl.y0, lx: pl.lx, ly: pl.ly, top: pl.top, bottom: pl.bottom, cell: acc.cell, maxNodes: acc.maxNodes });
     const spec = MATERIALS[this.stock.material] || MATERIALS.aluminium;
     this.stockMesh = new StockMesh(this.zmap, spec);
+    this.stockMesh.group.visible = !this.stockEmpty;
     this.machine.workGroup.add(this.stockMesh.group);
     if (this.vise) this.machine.workGroup.remove(this.vise.group);
     this.vise = buildVise(pl);
@@ -172,6 +191,13 @@ class App {
     this.clearMeasure();
     this.stats.removedTotal = 0;
     this.ui?.updateStockInfo();
+  }
+
+  // Workshop game: an empty vise has no stock to cut (removal and stock collisions are skipped).
+  setStockEmpty(empty) {
+    this.stockEmpty = !!empty;
+    if (this.stockMesh) this.stockMesh.group.visible = !this.stockEmpty;
+    this.clearMeasure();
   }
 
   setZeroFromStock(where, wcsIndex, silent = false) {
@@ -253,7 +279,7 @@ class App {
     if (c.estop || c.state === 'alarm') return c.cycleStart();
     if (c.exec) return;
     if (c.mode === 'AUTO') {
-      if (this.settings.freshBlank && this.zmap.removedTotal > 0) {
+      if (this.settings.freshBlank && !this.stockEmpty && !this.game?.manualBlanks && this.zmap.removedTotal > 0) {
         this.rebuildStock();
         this.ui.log('Fresh blank loaded for the new cycle (Settings: "Fresh blank at each AUTO start")');
       }
@@ -430,7 +456,8 @@ class App {
       const hit = this.fixtureHit(px, py, pz, cut);
       if (hit) return `Collision: the ${hit} hit the ${this.lastFixture}${where()}`;
     }
-    // 3. material removal
+    // 3. material removal (nothing to cut with an empty vise)
+    if (this.stockEmpty) return null;
     const zm = this.zmap;
     if (cut) {
       const r = cut.r;
@@ -594,7 +621,10 @@ class App {
       this.wcsMarker.position.set(wo.x + fr.tx - TC.x, wo.z + fr.tz + GZ, -(wo.y + fr.ty - TC.y));
       this.wcsMarker.rotation.y = (fr.rot * Math.PI) / 180;
     }
-    this.viewer.update(dt);
+    // the workshop game drives the camera itself in first person (and in the measuring station)
+    if (!this.game || !this.game.driveCamera(dt)) this.viewer.update(dt);
+    if (this.workshop) this.workshop.update(dt, this.viewer.camera);
+    this.game?.update(dt);
     this.viewer.render();
     this.updateMeasureLabels();
     this.uiTimer += dt;
@@ -612,6 +642,7 @@ class App {
     f.t += dt;
     if (f.t > 1) {
       this.ui.setFps(f.n / f.t, this.viewer.renderer.info.render.calls);
+      this.fpsNow = f.n / f.t;
       f.n = 0;
       f.t = 0;
     }

@@ -64,6 +64,9 @@ export class Viewer {
     this.raycaster = new THREE.Raycaster();
     this.pointer = new THREE.Vector2();
     this.tween = null;
+    this.showGizmo = true;
+    this.center = null; // optional principal point (canvas px) for overlays that cover part of the view
+    this._gDir = new THREE.Vector3();
     this.buildGizmo();
     this.setView('iso', false);
     this.ro = new ResizeObserver(() => this.resize());
@@ -122,9 +125,23 @@ export class Viewer {
     const w = Math.max(1, this.container.clientWidth), h = Math.max(1, this.container.clientHeight);
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
-    this.camera.updateProjectionMatrix();
     this.width = w;
     this.height = h;
+    this.applyCenter();
+  }
+
+  // Shift the projection so the view's centre lands at canvas pixel (x, y) (e.g. the part of the
+  // view left free by docked panels). null restores the normal centred projection.
+  setCenter(c) {
+    this.center = c ? { x: c.x, y: c.y } : null;
+    this.applyCenter();
+  }
+
+  applyCenter() {
+    const cam = this.camera, w = this.width || 1, h = this.height || 1;
+    if (this.center) cam.setViewOffset(w, h, w / 2 - this.center.x, h / 2 - this.center.y, w, h);
+    else cam.clearViewOffset();
+    cam.updateProjectionMatrix();
   }
 
   update(dt) {
@@ -145,13 +162,14 @@ export class Viewer {
     r.setScissorTest(false);
     r.clear();
     r.render(this.scene, this.camera);
+    if (!this.showGizmo) return;
     // axis gizmo in the bottom-left corner
     const s = 96;
     r.clearDepth();
     r.setScissorTest(true);
     r.setScissor(10, 10, s, s);
     r.setViewport(10, 10, s, s);
-    const dir = this.camera.position.clone().sub(this.controls.target).normalize();
+    const dir = this._gDir.copy(this.camera.position).sub(this.controls.target).normalize();
     this.gCam.position.copy(dir).multiplyScalar(4);
     this.gCam.quaternion.copy(this.camera.quaternion);
     r.render(this.gScene, this.gCam);

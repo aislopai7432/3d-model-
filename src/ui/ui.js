@@ -109,6 +109,8 @@ export class UI {
       home: () => c().home(),
       newBlank: () => {
         if (c().exec) return this.log('Stop the program before loading a new blank', 'warn');
+        if (app.game?.blockNewBlank()) return;
+        app.stockEmpty = false;
         app.rebuildStock();
         this.log('Fresh blank loaded');
         this.hmi.rerender();
@@ -134,7 +136,7 @@ export class UI {
       resetAll: () => {
         if (!confirm('Reset all settings, tools, offsets, R variables and stored programs to their defaults?')) return;
         try {
-          for (const k of ['milllab.v1', 'milllab.programs.v1', 'milllab.r', 'milllab.layout']) localStorage.removeItem(k);
+          for (const k of ['milllab.v1', 'milllab.programs.v1', 'milllab.r', 'milllab.layout', 'milllab.game']) localStorage.removeItem(k);
         } catch { /* ignore */ }
         location.reload();
       },
@@ -708,6 +710,8 @@ export class UI {
   bindKeyboard() {
     const keyJog = { ArrowLeft: ['x', -1], ArrowRight: ['x', 1], ArrowUp: ['y', 1], ArrowDown: ['y', -1], PageUp: ['z', 1], PageDown: ['z', -1] };
     window.addEventListener('keydown', (e) => {
+      // the workshop game owns the keyboard while walking or while one of its overlays is open
+      if (this.app.game?.blocksKey(e)) return;
       const tag = e.target.tagName;
       if (/^F[1-5]$/.test(e.key)) {
         e.preventDefault();
@@ -756,6 +760,7 @@ export class UI {
       const quick = performance.now() - down.t < 600;
       down = null;
       if (moved > 6 || !quick || e.button !== 0) return;
+      if (app.game?.blocksPointer()) return;
       if (app.measureOn) return app.measureClick(e.clientX, e.clientY);
       const hit = app.viewer.pick(e.clientX, e.clientY, app.machine.clickables);
       if (hit) this.act(hit.object.userData.action);
@@ -765,7 +770,7 @@ export class UI {
       if (now - hoverT < 60) return;
       hoverT = now;
       if (app.measureOn) return app.measureHover(e.clientX, e.clientY);
-      if (e.buttons) return;
+      if (e.buttons || app.game?.blocksPointer()) return;
       const hit = app.viewer.pick(e.clientX, e.clientY, app.machine.clickables);
       cv.classList.toggle('pick', !!hit);
       cv.title = hit ? { estop: 'Emergency stop', cycleStart: 'Cycle start', feedHold: 'Cycle stop', door: 'Open / close doors' }[hit.object.userData.action] : '';
