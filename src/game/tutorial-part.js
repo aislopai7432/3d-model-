@@ -38,10 +38,9 @@ export const TUTORIAL_PART = {
     { id: 'B', type: 'hole', x: 10, y: 10, d: 6.8, depth: 8 },
     { id: 'C', type: 'hole', x: 70, y: 40, d: 6.8, depth: 8 },
   ],
+  // the drawing adds blank size, datums, drill point and general tolerance notes itself
   notes: [
-    'All dimensions from the front-left corner of the top face (datum X0 Y0)',
-    'Face the top 1 mm to thickness 15',
-    'Hole depth 8 is to the full Ø6.8; the drill point is extra',
+    'Depths are measured from the finished (faced) top face',
     'Break all sharp edges',
   ],
   setupNote: SETUP,
