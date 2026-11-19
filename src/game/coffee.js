@@ -16,7 +16,7 @@ function steamTexture(seed) {
   for (let i = 0; i < 26; i++) {
     const x = N / 2 + (R() - 0.5) * N * 0.5, y = N / 2 + (R() - 0.5) * N * 0.55, r = N * (0.08 + R() * 0.16);
     const gr = g.createRadialGradient(x, y, 0, x, y, r);
-    gr.addColorStop(0, `rgba(255,255,255,${0.1 + R() * 0.16})`);
+    gr.addColorStop(0, `rgba(255,255,255,${0.16 + R() * 0.2})`);
     gr.addColorStop(1, 'rgba(255,255,255,0)');
     g.fillStyle = gr;
     g.fillRect(0, 0, N, N);
@@ -58,10 +58,10 @@ function liquidTexture() {
   c.height = 256;
   const g = c.getContext('2d');
   const gr = g.createLinearGradient(0, 0, 0, 256);
-  gr.addColorStop(0, '#3a1f10');
+  gr.addColorStop(0, '#4a2814');
   gr.addColorStop(0.55, '#4a2814');
   gr.addColorStop(0.8, '#7a4a26');
-  gr.addColorStop(0.9, '#a8723f'); // crema ring
+  gr.addColorStop(0.9, '#8a5a30'); // crema ring
   gr.addColorStop(0.96, '#5a3017');
   gr.addColorStop(1, '#2a1409');
   g.fillStyle = gr;
@@ -141,7 +141,7 @@ function handleGeometry() {
 
 function buildMug() {
   const ceramic = new THREE.MeshPhysicalMaterial({
-    color: 0xf2efe8,
+    color: 0xe6e2d9,
     roughness: 0.2,
     roughnessMap: noiseTexture(7, 128, 0.16),
     metalness: 0,
@@ -204,7 +204,7 @@ function start(app) {
   const root = new THREE.Group(); // camera-space frame (same orientation as the viewer camera)
   scene.add(root);
   const ocam = new THREE.PerspectiveCamera();
-  const key = new THREE.DirectionalLight(0xfff1de, 2.2);
+  const key = new THREE.DirectionalLight(0xfff1de, 1.5);
   key.position.set(-260, 340, 220);
   const fill = new THREE.HemisphereLight(0xcfe0ff, 0x4a3a2c, 0.5);
   const rim = new THREE.DirectionalLight(0xbcd4ff, 0.8);
@@ -261,11 +261,11 @@ function start(app) {
       // rest pose just below the view, raised pose in front of the face; tilt toward the mouth while sipping
       const sway = Math.sin(t * 2.3) * 3 * up, sway2 = Math.sin(t * 1.7 + 1) * 2.5 * up;
       mug.position.set(60 - 40 * up + sway, -330 + 250 * up + 25 * sip + sway2, -330 + 70 * up + 40 * sip);
-      mug.rotation.set(0.25 * (1 - up) + 0.8 * sip + Math.sin(t * 1.3) * 0.015 * up, -0.35, 0.12 * up + Math.sin(t * 2.0) * 0.012 * up);
+      mug.rotation.set(0.25 * (1 - up) + 0.3 * up + 0.8 * sip + Math.sin(t * 1.3) * 0.015 * up, -0.35, 0.12 * up + Math.sin(t * 2.0) * 0.012 * up);
       mug.updateMatrix();
       // coffee stays level (slightly lagging) while the mug tilts
       const lq = mug.userData.liquid;
-      lq.rotation.x = -mug.rotation.x * 0.62;
+      lq.rotation.x = -mug.rotation.x * 0.85;
       lq.rotation.z = -mug.rotation.z * 0.7;
       // steam: rises from the coffee surface in camera space, curls, grows and dissipates
       const origin = new THREE.Vector3(0, 33, 0).applyMatrix4(mug.matrix);
@@ -277,7 +277,7 @@ function start(app) {
         const size = (34 + ph * 120) * u.sz;
         p.scale.set(size, size * 1.2, 1);
         p.material.rotation = u.a + ph * u.rot * 4;
-        p.material.opacity = dens * 0.34 * Math.pow(Math.sin(Math.min(1, ph * 1.05) * Math.PI), 1.3) * (ph < 0.08 ? ph / 0.08 : 1);
+        p.material.opacity = dens * 0.8 * Math.pow(Math.sin(Math.min(1, ph * 1.05) * Math.PI), 1.3) * (ph < 0.08 ? ph / 0.08 : 1);
       }
       if (t >= DUR) {
         t = -1;
