@@ -508,6 +508,23 @@ export class Game {
     this.save();
   }
 
+  // Carrying a blank while the vise is occupied. An unmachined blank in the vise is simply swapped
+  // (it goes back on the rack); a machined part is never thrown away, so the player is told what to do.
+  swapBlank() {
+    const app = this.app;
+    const busy = this.machineBusy();
+    if (busy) return this.ui.toast(busy, 'warn');
+    if (app.zmap.removedTotal > 0.5) {
+      return this.ui.toast('The vise still holds a machined part. Put your blank back on the stock rack first (E at the rack), then unload the part and take it to the inspection bench.', 'warn', 6500);
+    }
+    const old = this.blankFromApp();
+    app.setStockEmpty(true);
+    this.s.vise = null;
+    this.markParts('vise');
+    this.loadBlank();
+    if (!app.stockEmpty) this.ui.toast(`Swapped blanks: the old ${blankLabel(old)} went back on the rack, yours is clamped.`, 'ok', 4500);
+  }
+
   machineBusy() {
     const c = this.app.controller;
     if (c.exec) return 'Stop the program first (RESET at the control panel).';
@@ -814,7 +831,12 @@ export class Game {
       L.push({ object: o, id: 'mc:' + a, label });
     }
     let vl;
-    if (!app.stockEmpty) vl = this.carryPart || s.carry ? 'Vise (hands full)' : app.zmap.removedTotal > 0.5 ? 'Unload the part' : 'Take the blank out of the vise';
+    if (!app.stockEmpty) {
+      const machined = app.zmap.removedTotal > 0.5;
+      if (s.carry?.kind === 'blank') vl = machined ? 'Vise holds a machined part (put your blank back on the rack first)' : 'Swap blanks: clamp yours (the old one goes back on the rack)';
+      else if (this.carryPart) vl = 'Vise (hands full)';
+      else vl = machined ? 'Unload the part' : 'Take the blank out of the vise';
+    }
     else vl = s.carry?.kind === 'blank' ? 'Clamp the blank in the vise' : 'Vise (empty): fetch a blank from the stock rack';
     if (app.vise) L.push({ object: app.vise.group, id: 'vise', label: vl });
     if (app.stockMesh && !app.stockEmpty) L.push({ object: app.stockMesh.group, id: 'vise', label: vl });
@@ -857,7 +879,8 @@ export class Game {
       if (a === 'door' && app.controller.exec && app.controller.doorInterlock && app.controller.door.target < 0.5) this.ui.toast('Door interlock: the doors stay closed while the program runs.', 'warn');
       app.ui.act(a);
     } else if (id === 'vise') {
-      if (!app.stockEmpty) this.unload();
+      if (!app.stockEmpty && this.s.carry?.kind === 'blank') this.swapBlank();
+      else if (!app.stockEmpty) this.unload();
       else if (this.s.carry?.kind === 'blank') this.loadBlank();
       else if (this.carryPart) this.ui.toast('Your hands are full: take the part to the inspection bench.', 'warn');
       else this.ui.toast('The vise is empty: fetch a blank from the stock rack (right-hand wall).', 'info');
