@@ -22,6 +22,7 @@ import { UI } from './ui/ui.js';
 import { buildWorkshop } from './scene/workshop.js';
 import { Game } from './game/game.js';
 import { applyZMapState, zmapFromState } from './game/partstore.js';
+import { HaasControl, haasDialect } from './ui/haas/haas.js';
 
 const STORE = 'milllab.v1';
 const $ = (s) => document.querySelector(s);
@@ -41,7 +42,7 @@ const TABLE = MACHINE.table;
 class App {
   constructor() {
     const s = loadStore();
-    this.settings = { ...DEFAULT_SETTINGS, ...(s.settings || {}) };
+    this.settings = { ...DEFAULT_SETTINGS, control: 'haas', ...(s.settings || {}) }; // control: 'haas' (NGC-style) | '808d'
     this.settings.wal = { ...DEFAULT_SETTINGS.wal, ...(this.settings.wal || {}) };
     this.tools = (s.tools && s.tools.length ? s.tools : DEFAULT_TOOLS).map((t) => ({ dLength: 0, dRadius: 0, ...t }));
     this.programs = new ProgramStore();
@@ -111,6 +112,9 @@ class App {
     if (cur) this.openProgram(cur);
     else this.loadExample808('sie-full', true);
     this.ui.init();
+    // NGC-style control (pendant keyboard + screen); the 808D-style control stays available
+    this.haas = new HaasControl(this);
+    this.haas.init();
     this.applyVisualSettings();
     this.ui.loading('Building the workshop…');
     await nextFrame();
@@ -285,7 +289,7 @@ class App {
     delete modal.codes;
     if (modal.mcall) delete modal.mcall;
     const opts = this.compileOpts();
-    opts.forceDialect = modal.dialect === 'iso' ? 'iso' : detectDialect(text, 'siemens');
+    opts.forceDialect = this.haas?.active ? detectDialect(text, haasDialect()) : modal.dialect === 'iso' ? 'iso' : modal.dialect === 'haas' || this.settings.dialect === 'haas' ? 'haas' : detectDialect(text, 'siemens');
     return compileProgram(text, opts, { pos: { ...c.pos }, tool: c.tool, carousel: c.carousel, rpm: Math.abs(c.spindle.rpm), modal, R: this.R });
   }
 
@@ -633,6 +637,7 @@ class App {
     m.update({
       x: c.pos.x, y: c.pos.y, z: c.pos.z, lift: c.atc.lift, spindleAngle: visualAngle(c, dt, this), door: c.door.pos,
       atcSlide: c.atc.slide, atcAngle: c.atc.angle, spindleTool: c.tool, state: c.state, estop: c.estop,
+      control: this.haas?.active ? 'haas' : '808d', beacon: this.haas?.active ? this.haas.beaconNow || 'off' : null, haasEstop: this.haas?.estopLatched,
     });
     this.stockMesh.update();
     this.stockMesh.setWet(c.coolant.flood ? Math.min(1, (this.wet = Math.min(1, (this.wet || 0) + dt * 0.6))) : (this.wet = Math.max(0, (this.wet || 0) - dt * 0.05)));
@@ -687,6 +692,7 @@ class App {
 
   // ------------------------------------------------------------------ pendant screen texture
   drawPendantScreen() {
+    if (this.haas?.active) return this.haas.drawScreen(this.machine.screenCanvas);
     const cv = this.machine.screenCanvas;
     const g = cv.getContext('2d');
     const c = this.controller;

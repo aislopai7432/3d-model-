@@ -4,12 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#121417">
-<title>MillLab: CNC Workshop and 808D Simulator</title>
+<title>MillLab: CNC Workshop and VMC Simulator</title>
 <meta name="description" content="A 3-axis CNC milling simulator with an 808D-style control: Siemens-mode G-code with cycles, R parameters and cutter compensation, ISO dialect, Z-map material removal and an industrial operator panel.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="./styles.css">
+<link rel="stylesheet" href="./src/ui/haas/haas.css">
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -122,6 +123,8 @@
         <div class="hsk" id="hsk"></div>
       </div>
     </section>
+
+    <section class="haas" id="haas" aria-label="NGC-style control pendant"></section>
   </main>
 
   <footer class="mcp" id="mcp" aria-label="Machine control panel">

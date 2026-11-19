@@ -732,6 +732,7 @@ export class HMI {
   page_settings(el) {
     const s = this.app.settings;
     el.innerHTML = `<div class="hp"><div class="hbox"><div class="hbox-h">Control</div><div class="hbox-b fgrid">
+      <label>Control style<select data-s="control"><option value="haas" ${s.control !== '808d' ? 'selected' : ''}>NGC-style (pendant keyboard)</option><option value="808d" ${s.control === '808d' ? 'selected' : ''}>808D-style</option></select></label>
       <label>Default program dialect<select data-s="dialect"><option value="siemens" ${s.dialect === 'siemens' ? 'selected' : ''}>Siemens mode (G290)</option><option value="iso" ${s.dialect === 'iso' ? 'selected' : ''}>ISO dialect (G291)</option></select></label>
       <label class="chk"><input type="checkbox" data-c="requireG43" ${s.requireG43 ? 'checked' : ''}> ISO: require G43 H_ for tool length</label>
       <label class="chk"><input type="checkbox" data-c="doorInterlock" ${s.doorInterlock ? 'checked' : ''}> Door interlock</label>

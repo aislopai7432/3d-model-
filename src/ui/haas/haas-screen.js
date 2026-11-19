@@ -82,6 +82,9 @@ function win(h, key, cur, total, rows) {
   return top;
 }
 
+// the editor shows the end-of-block marker after every block
+const eob = (l) => (l.trim() && l.trim() !== '%' && !/;\s*$/.test(l) ? '<span class="eob"> ;</span>' : '');
+
 function rowsFor(h, part, minus = 0) {
   const el = h.parts[part]?.el;
   const lh = h.rowH || 16;
@@ -98,7 +101,8 @@ export function haasCodes(m) {
 
 function modeString(h) {
   const m = h.mode;
-  return { EDIT: 'EDIT: EDIT', MEM: 'OPERATION: MEM', MDI: 'EDIT: MDI', JOG: 'SETUP: JOG', ZERO: 'SETUP: ZERO', LIST: 'LIST PROGRAM: ANY' }[m];
+  if (m === 'LIST') return `Operation: ${{ AUTO: 'MEM', MDA: 'MDI', JOG: 'JOG', REF: 'ZERO' }[h.c.mode] || 'MEM'}`;
+  return { EDIT: 'Edit: EDIT', MEM: 'Operation: MEM', MDI: 'Edit: MDI', JOG: 'Setup: JOG', ZERO: 'Setup: ZERO' }[m];
 }
 
 function curProgram(h) {
@@ -118,6 +122,7 @@ export function paintScreen(h, force) {
   const fs = Math.max(8.5, Math.min(13, W / 62));
   if (h._fs !== fs) { h._fs = fs; scr.style.setProperty('--fs', fs.toFixed(2) + 'px'); }
   h.rowH = Math.round(fs * 1.5);
+  if (h._rh !== h.rowH) { h._rh = h.rowH; scr.style.setProperty('--rh', h.rowH + 'px'); }
   scr.classList.toggle('off', !h.power);
   const boot = h.power && h.boot > 0;
   h.bootEl.hidden = !boot;
@@ -175,11 +180,11 @@ function progPane(h) {
     if (i === exec) cls = 'exec';
     else if (!mdi && i === cur && exec < 0 && h.mode !== 'EDIT') cls = 'ptr';
     else if (h.mode === 'EDIT' && i === h.editCur.line) cls = 'ptr';
-    let txt = esc(l) || '&nbsp;';
+    let txt = (esc(l) || '&nbsp;') + eob(l);
     if (mdi && i === h.mdiCur.line && h.disp !== 'list') {
       const ws = lineWords(l);
       const w = ws[h.mdiCur.word];
-      if (w) txt = esc(l.slice(0, w.a)) + `<em class="wcur">${esc(w.s)}</em>` + esc(l.slice(w.b));
+      if (w) txt = esc(l.slice(0, w.a)) + `<em class="wcur">${esc(w.s)}</em>` + esc(l.slice(w.b)) + eob(l);
       cls = cls || 'curl';
     }
     body += `<div class="pl ${cls}" data-row="${i}" data-cur="${mdi ? 'mdi' : 'mem'}">${txt}</div>`;
@@ -506,11 +511,11 @@ function mainEdit(h) {
   let body = '';
   for (let i = top; i < Math.min(lines.length, top + rows); i++) {
     const l = lines[i];
-    let txt = esc(l) || '&nbsp;';
+    let txt = (esc(l) || '&nbsp;') + eob(l);
     if (i === cur.line) {
       const ws = lineWords(l);
       const w = ws[cur.word];
-      if (w) txt = esc(l.slice(0, w.a)) + `<em class="wcur">${esc(w.s)}</em>` + esc(l.slice(w.b));
+      if (w) txt = esc(l.slice(0, w.a)) + `<em class="wcur">${esc(w.s)}</em>` + esc(l.slice(w.b)) + eob(l);
     }
     const err = app.compiled?.errors.some((e) => e.line === i);
     body += `<div class="el${i === cur.line ? ' curl' : ''}${sel && i >= sel[0] && i <= sel[1] ? ' sel' : ''}${err ? ' err' : ''}" data-row="${i}" data-cur="edit"><span class="ln">${i + 1}</span>${txt}</div>`;
@@ -653,9 +658,9 @@ function bottomPanes(h) {
   const axLoad = (a) => Math.min(100, (c.homed || c.exec ? 2 : 0) + (lp.v[a] / (MACHINE.rapidXY / 60)) * 45 + (app.stats.cutting && lp.v[a] > 0.1 ? load * 0.3 : 0));
   const wcs = c.modal.wcs >= 54 && c.modal.wcs <= 59 ? `G${c.modal.wcs}` : 'G54';
   const w = c.workPos({});
-  const pos = `<div class="bp pos"><div class="bp-h"><span>Positions</span><span>Program ${wcs} ${c.modal.tlo === 43 ? 'G43' : 'G49'} H${c.modal.tloH || 0}</span><span>(${h.inch ? 'IN' : 'MM'})</span></div><div class="bp-b"><div class="prw hd"><span></span><span>Work</span><span>Machine</span><span>Load</span></div>${['x', 'y', 'z'].map((a) => {
+  const pos = `<div class="bp pos"><div class="bp-h"><span>Positions</span><span>Program ${wcs} ${c.modal.tlo === 43 ? 'G43' : 'G49'} H${c.modal.tloH || 0}</span><span></span></div><div class="bp-b"><div class="prw hd"><span></span><span>(${h.inch ? 'IN' : 'MM'})</span><span></span><span>Load</span></div>${['x', 'y', 'z'].map((a) => {
     const l = axLoad(a);
-    return `<div class="prw"><b>${a.toUpperCase()}${c.ref[a] ? '' : '<small>?</small>'}</b><span class="v">${ax(h, w[a])}</span><span class="v m">${ax(h, c.pos[a])}</span><span class="ld">${bar(l)}<em>${l.toFixed(0)}%</em></span></div>`;
+    return `<div class="prw"><b>${a.toUpperCase()}</b><span class="v">${ax(h, w[a])}</span><span class="ld">${bar(l)}</span><em>${l.toFixed(0)}%</em></div>`;
   }).join('')}</div></div>`;
   const prog = c.program;
   const remain = c.exec?.kind === 'program' && prog ? prog.totalTime * (1 - c.progress) : prog ? prog.totalTime : 0;

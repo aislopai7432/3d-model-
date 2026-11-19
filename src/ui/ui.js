@@ -136,7 +136,7 @@ export class UI {
       resetAll: () => {
         if (!confirm('Reset all settings, tools, offsets, R variables and stored programs to their defaults?')) return;
         try {
-          for (const k of ['milllab.v1', 'milllab.programs.v1', 'milllab.r', 'milllab.layout', 'milllab.game']) localStorage.removeItem(k);
+          for (const k of ['milllab.v1', 'milllab.programs.v1', 'milllab.r', 'milllab.layout', 'milllab.game', 'milllab.haas']) localStorage.removeItem(k);
         } catch { /* ignore */ }
         location.reload();
       },
@@ -622,6 +622,7 @@ export class UI {
 
   setOption(k, v) {
     const app = this.app, s = app.settings;
+    if (k === 'control') return app.haas?.setControl(v);
     // a new accuracy re-creates the Z-map: in the workshop that would throw away the machined blank
     if (k === 'accuracy' && !app.stockEmpty && app.zmap?.removedTotal > 0 && app.game?.blockStockChange('Accuracy')) { this.hmi.rerender(); return; }
     s[k] = v;
@@ -713,6 +714,8 @@ export class UI {
   bindKeyboard() {
     const keyJog = { ArrowLeft: ['x', -1], ArrowRight: ['x', 1], ArrowUp: ['y', 1], ArrowDown: ['y', -1], PageUp: ['z', 1], PageDown: ['z', -1] };
     window.addEventListener('keydown', (e) => {
+      // the NGC-style control takes the keys it uses (input line, cursor, F1-F4 ...) when it is shown
+      if (this.app.haas?.handleKey(e)) return;
       // the workshop game owns the keyboard while walking or while one of its overlays is open
       if (this.app.game?.blocksKey(e)) return;
       const tag = e.target.tagName;
@@ -841,6 +844,7 @@ export class UI {
 
   update(force = false) {
     if (force) this.lastUi = {};
+    this.app.haas?.tick();
     const app = this.app, c = this.c;
     const w = c.workPos({});
     const inch = c.modal.units === 20;

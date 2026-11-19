@@ -11,7 +11,8 @@ import { pocketAngle } from '../../sim/controller.js';
 import { normName, validName } from '../programs.js';
 import { buildPendant, CHARS, PHYS, CHAR_KEY } from './haas-keys.js';
 import { VPS_TEMPLATES, defaults as vpsDefaults, generate as vpsGenerate } from './haas-vps.js';
-import { paintScreen, drawPendantTexture, ALARM_TEXT, SETTINGS_GROUPS, settingDefs } from './haas-screen.js';
+import { paintScreen, drawPendantTexture, ALARM_TEXT, SETTINGS_GROUPS, settingDefs, haasCodes } from './haas-screen.js';
+import { haasDefault } from '../../gcode/haas.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const STORE = 'milllab.haas';
@@ -216,7 +217,7 @@ export class HaasControl {
         return lim != null ? Math.max(-lim, Math.min(lim, v)) : v;
       },
     });
-    if (new ResizeObserver) new ResizeObserver(() => this.layout()).observe(root);
+    if (window.ResizeObserver) new ResizeObserver(() => { this.layout(); this.paint(); }).observe(root);
     window.addEventListener('keyup', (e) => this.handleKeyUp(e));
     // start-up: informative alarm 102 like the real control after power on
     this.addAlarm({ num: 102, text: ALARM_TEXT[102] }, true);
@@ -252,8 +253,8 @@ export class HaasControl {
 
   isoModal() {
     const u = this.app.settings.defaultUnits || 21;
-    const m = { ...defaultModal(u), tloLen: 0 };
-    m.codes = modalCodes(m);
+    const m = haasDialect() === 'haas' ? { ...haasDefault(u), tloLen: 0 } : { ...defaultModal(u), tloLen: 0 };
+    m.codes = m.dialect === 'haas' ? haasCodes(m).join(' ') : modalCodes(m);
     this.c.modal = Object.freeze(m);
   }
 
@@ -772,11 +773,8 @@ export class HaasControl {
     if (this.doorOpen()) return this.say('Close the door before POWER UP', 'warn');
     this.say('POWER UP: zero return, Z first, then X and Y');
     const tool = this.set(81);
-    if (tool > 0 && tool !== c.tool && this.app.tools.some((t) => t.number === tool)) {
-      c.chain = [{ fn: () => this.runMDI(`T${tool} M06`) }];
-      c.home();
-      c.chain = [{ fn: () => this.runMDI(`T${tool} M06`) }];
-    } else c.home();
+    c.home();
+    if (tool > 0 && tool !== c.tool && this.app.tools.some((t) => t.number === tool)) c.chain = [{ fn: () => this.runMDI(`T${tool} M06`) }];
   }
 
   k_RECOVER() {

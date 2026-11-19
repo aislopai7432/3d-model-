@@ -359,7 +359,7 @@ export class GameUI {
     const dpOpen = !this.dpEl.classList.contains('closed');
     const peek = body.classList.contains('op-peek');
     const left = !phone && dpOpen && !peek ? this.dpEl.getBoundingClientRect().right : 0;
-    const cu = $('#cu').getBoundingClientRect();
+    const cu = $(body.classList.contains('ctl-haas') ? '#haas' : '#cu').getBoundingClientRect();
     const right = !phone && !peek && cu.width ? cu.left : innerWidth;
     body.style.setProperty('--op-l', Math.round(left) + 'px');
     body.style.setProperty('--op-r', Math.round(innerWidth - right) + 'px');

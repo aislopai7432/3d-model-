@@ -1804,7 +1804,18 @@ export class HaasInterpreter extends SiemensInterpreter {
     switch (M) {
       case 0: case 1:
         if (this.buf) throw A(349, '', mw);
-        this.emit({ t: 'stop', optional: M === 1 });
+        if (M === 0) {
+          // M00 stops the spindle and the coolant (Haas manual). Cycle Start resumes; the simulator
+          // restores the previous spindle/coolant state after the stop.
+          const dir = S.spindleDir, rpm = S.rpm, fl = S.flood, mi = S.mist;
+          if (dir) this.spindleOp(0, 0);
+          if (fl || mi) this.emit({ t: 'coolant', flood: false, mist: false });
+          this.emit({ t: 'stop', optional: false });
+          if (fl || mi) this.emit({ t: 'coolant', flood: fl, mist: mi });
+          if (dir) this.spindleOp(rpm, dir);
+          return null;
+        }
+        this.emit({ t: 'stop', optional: true });
         return null;
       case 2: case 30:
         if (this.buf || S.crc !== 40) throw A(349, '', mw);

@@ -27,7 +27,7 @@ export const GROUPS = [
     id: 'display', title: 'DISPLAY', plate: 'black', cols: 4, area: 'dsp',
     keys: [
       K('PROGRAM', 'PROGRAM'), K('POSITION', 'POSITION'), K('OFFSET', 'OFFSET'), K('CURRENT_COMMANDS', 'CURRENT<br>COMMANDS'),
-      K('ALARMS', 'ALARMS'), K('DIAGNOSTIC', 'DIAG-<br>NOSTIC'), K('SETTING', 'SETTING'), K('HELP', 'HELP'),
+      K('ALARMS', 'ALARMS'), K('DIAGNOSTIC', 'DIAGNOSTIC', 'g tight'), K('SETTING', 'SETTING'), K('HELP', 'HELP'),
     ],
   },
   {
@@ -44,7 +44,7 @@ export const GROUPS = [
       K('EDIT', 'EDIT', 'm'), K('INSERT', 'INSERT'), K('ALTER', 'ALTER'), K('DELETE', 'DELETE'), K('UNDO', 'UNDO'),
       K('MEMORY', 'MEMORY', 'm'), K('SINGLE_BLOCK', 'SINGLE<br>BLOCK'), K('GRAPHICS', 'GRAPHICS'), K('OPTION_STOP', 'OPTION<br>STOP'), K('BLOCK_DELETE', 'BLOCK<br>DELETE'),
       K('MDI', 'MDI', 'm'), K('COOLANT', 'COOLANT'), K('HANDLE_SCROLL', 'HANDLE<br>SCROLL'), K('ATC_FWD', 'ATC<br>FWD'), K('ATC_REV', 'ATC<br>REV'),
-      K('HANDLE_JOG', 'HANDLE<br>JOG', 'm'), K('INC_1', big('.0001', '.1'), 'g inc'), K('INC_2', big('.001', '1.'), 'g inc'), K('INC_3', big('.01', '10.'), 'g inc'), K('INC_4', big('.1', '100.'), 'g inc'),
+      K('HANDLE_JOG', 'HANDLE<br>JOG', 'm'), K('INC_1', '.0001<br>.1', 'g inc'), K('INC_2', '.001<br>1.', 'g inc'), K('INC_3', '.01<br>10.', 'g inc'), K('INC_4', '.1<br>100.', 'g inc'),
       K('ZERO_RETURN', 'ZERO<br>RETURN', 'm'), K('ALL', 'ALL'), K('ORIGIN', 'ORIGIN'), K('SINGLE', 'SINGLE'), K('HOME_G28', 'HOME<br>G28'),
       K('LIST_PROGRAM', 'LIST<br>PROGRAM', 'm'), K('SELECT_PROGRAM', 'SELECT<br>PROGRAM'), K('BACK', arrow('back'), 'g', { title: 'Back' }), K('FORWARD', arrow('fwd'), 'g', { title: 'Forward' }), K('ERASE_PROGRAM', 'ERASE<br>PROGRAM'),
     ],
@@ -52,9 +52,9 @@ export const GROUPS = [
   {
     id: 'jog', title: '', plate: 'blue', cols: 5, area: 'jog',
     keys: [
-      K('CHIP_FWD', 'CHIP<br>FWD', 't'), K('JOG_+A', `<i class="corner">+B</i><b>+A/C</b>`, 'w ac'), K('JOG_+Z', `${arrow('up')}<span>+Z</span>`, 'w jk'), K('JOG_-Y', `${arrow('ne')}<span>-Y</span>`, 'w jk'), K('CLNT_UP', 'CLNT<br>UP', 't'),
+      K('CHIP_FWD', 'CHIP<br>FWD', 't'), K('JOG_+A', `<i class="ycorner tl"><b>+B</b></i><span class="jl br">+A/C</span>`, 'w jk'), K('JOG_+Z', `<span class="col">${arrow('up')}<span>+Z</span></span>`, 'w jk'), K('JOG_-Y', `<i class="tri ne"></i><span class="jl bl">-Y</span>`, 'w jk'), K('CLNT_UP', 'CLNT<br>UP', 't'),
       K('CHIP_STOP', 'CHIP<br>STOP', 't'), K('JOG_+X', `<span class="row">${arrow('left')}<span>+X</span></span>`, 'w jk'), K('JOG_LOCK', 'JOG<br>LOCK', 'w'), K('JOG_-X', `<span class="row"><span>-X</span>${arrow('right')}</span>`, 'w jk'), K('CLNT_DOWN', 'CLNT<br>DOWN', 't'),
-      K('CHIP_REV', 'CHIP<br>REV', 't'), K('JOG_+Y', `<span>+Y</span>${arrow('sw')}`, 'w jk'), K('JOG_-Z', `<span>-Z</span>${arrow('down')}`, 'w jk'), K('JOG_-A', `<i class="corner">-B</i><b>-A/C</b>`, 'w ac'), K('AUX_CLNT', 'AUX<br>CLNT', 't'),
+      K('CHIP_REV', 'CHIP<br>REV', 't'), K('JOG_+Y', `<i class="tri sw"></i><span class="jl tr">+Y</span>`, 'w jk'), K('JOG_-Z', `<span class="col"><span>-Z</span>${arrow('down')}</span>`, 'w jk'), K('JOG_-A', `<span class="jl tl">-A/C</span><i class="ycorner br"><b>-B</b></i>`, 'w jk'), K('AUX_CLNT', 'AUX<br>CLNT', 't'),
     ],
   },
   {
@@ -69,7 +69,7 @@ export const GROUPS = [
   {
     id: 'alpha', title: '', plate: 'none', cols: 6, area: 'alp',
     keys: [
-      K('SHIFT', 'SHIFT', 'g shift'), ...'ABCDE'.split('').map((c) => K('A_' + c, `<b>${c}</b>`, 'g ch')),
+      K('SHIFT', 'SHIFT', 'g shift ch'), ...'ABCDE'.split('').map((c) => K('A_' + c, `<b>${c}</b>`, 'g ch')),
       ...'FGHIJK'.split('').map((c) => K('A_' + c, `<b>${c}</b>`, 'g ch')),
       ...'LMNOPQ'.split('').map((c) => K('A_' + c, `<b>${c}</b>`, 'g ch')),
       ...'RSTUVW'.split('').map((c) => K('A_' + c, `<b>${c}</b>`, 'g ch')),
@@ -158,39 +158,37 @@ export function buildPendant(root) {
   const groups = Object.fromEntries(GROUPS.map((g) => [g.area, `<div class="hg hg-${g.id} plate-${g.plate}" style="--cols:${g.cols}">${g.title ? `<div class="hg-title">${g.title}</div>` : ''}<div class="hg-keys">${g.keys.map(keyHtml).join('')}</div></div>`]));
   root.innerHTML = `
   <div class="hp-beacon" title="Beacon light"><i id="hpBeacon"></i></div>
+  <div class="hp-body">
   <div class="hp-face">
     <div class="hp-left">
+      <div class="hp-brand"><b>VMC-MINI</b><span>NGC-style control</span></div>
       <div class="hp-power">
-        <button type="button" class="hp-pwr on" data-k="POWER_ON" title="POWER ON"><span>I</span></button>
-        <button type="button" class="hp-pwr off" data-k="POWER_OFF" title="POWER OFF"><span>O</span></button>
+        <div class="hp-pw"><span class="hp-cap">POWER ON</span><button type="button" class="hp-pwr on" data-k="POWER_ON" title="POWER ON"><span>I</span></button></div>
+        <div class="hp-pw"><span class="hp-cap">POWER OFF</span><button type="button" class="hp-pwr off" data-k="POWER_OFF" title="POWER OFF"><span>O</span></button></div>
       </div>
-      <div class="hp-estop-wrap"><button type="button" class="hp-estop" data-k="ESTOP" title="EMERGENCY STOP (press; press again to twist-release)"><i></i></button><span class="hp-cap">EMERGENCY STOP</span></div>
-      <div class="hp-handle" id="hpHandle" title="Jog handle: drag to turn, or scroll. 100 detents per turn.">${handwheelSvg()}<span class="hp-cap" id="hpHandleCap">HANDLE</span></div>
+      <div class="hp-estop-wrap"><span class="hp-cap">EMERGENCY STOP</span><button type="button" class="hp-estop" data-k="ESTOP" title="EMERGENCY STOP (press; press again to twist-release)"><i></i></button></div>
+      <div class="hp-handle" id="hpHandle" title="Jog handle: drag to turn, or scroll. 100 detents per turn."><span class="hp-cap">HANDLE JOG</span>${handwheelSvg()}<span class="hp-hcap" id="hpHandleCap"></span></div>
       <div class="hp-cycle">
-        <button type="button" class="hp-cs" data-k="CYCLE_START" title="CYCLE START"><svg viewBox="0 0 24 24"><rect x="5" y="6" width="14" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8v8" stroke="currentColor" stroke-width="2.4"/></svg></button>
-        <button type="button" class="hp-fh" data-k="FEED_HOLD" title="FEED HOLD"><svg viewBox="0 0 24 24"><rect x="5" y="6" width="14" height="12" rx="1" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3.4" fill="none" stroke="currentColor" stroke-width="2.2"/></svg></button>
-        <span class="hp-cap">CYCLE START</span><span class="hp-cap">FEED HOLD</span>
-      </div>
-      <div class="hp-side" aria-label="Side panel">
-        <div class="hp-cap side-t">SIDE PANEL</div>
-        <button type="button" class="hp-ks" data-k="MEMORY_LOCK" title="MEMORY LOCK key switch"><span class="ks-ic">${icon.mem}${icon.lock}</span><span class="ks"><i></i></span><span class="ks-l" id="hpMemLbl">UNLOCKED</span></button>
-        <button type="button" class="hp-ks" data-k="SETUP_MODE" title="SETUP MODE key switch: locked = RUN mode, unlocked = SETUP mode"><span class="ks-ic">${icon.wrench}${icon.lock}</span><span class="ks"><i></i></span><span class="ks-l" id="hpSetupLbl">RUN</span></button>
-        <div class="hp-sbtns">
-          <button type="button" class="hp-sb" data-k="SECOND_HOME" title="SECOND HOME">${icon.home2}</button>
-          <button type="button" class="hp-sb" data-k="WORK_LIGHT" title="WORK LIGHT">${icon.bulb}</button>
-          <button type="button" class="hp-sb" data-k="AUTO_DOOR" title="AUTO DOOR (option)">${icon.door}</button>
-          <button type="button" class="hp-sb" data-k="USB" title="USB port">${icon.usb}</button>
-        </div>
+        <div class="hp-pw"><span class="hp-cap">CYCLE START</span><button type="button" class="hp-cs" data-k="CYCLE_START" title="CYCLE START"><svg viewBox="0 0 40 28"><path d="M6 4h28v20H6z" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M20 8v12" stroke="currentColor" stroke-width="3"/><path d="M2 9l4-5 4 5M38 19l-4 5-4-5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></button></div>
+        <div class="hp-pw"><span class="hp-cap">FEED HOLD</span><button type="button" class="hp-fh" data-k="FEED_HOLD" title="FEED HOLD"><svg viewBox="0 0 40 28"><path d="M6 4h28v20H6z" fill="none" stroke="currentColor" stroke-width="2.4"/><circle cx="20" cy="14" r="5" fill="none" stroke="currentColor" stroke-width="2.6"/><path d="M2 9l4-5 4 5M38 19l-4 5-4-5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></button></div>
       </div>
     </div>
     <div class="hp-right">
-      <div class="hp-lcd"><div class="hp-label">VMC-MINI · NGC-style control</div><div class="hs" id="hsScreen" tabindex="-1"></div></div>
-      <div class="hp-kb" id="hpKb">
-        <div class="kb-col kb-a">${groups.fn}${groups.jog}${groups.ovr}</div>
-        <div class="kb-col kb-b">${groups.dsp}${groups.cur}${groups.alp}</div>
-        <div class="kb-col kb-c">${groups.mod}${groups.num}</div>
-      </div>
+      <div class="hp-lcd"><div class="hs" id="hsScreen" tabindex="-1"></div></div>
+      <div class="hp-kb" id="hpKb"><div class="kb-in">
+        <div class="kb-band kb-top"><div class="kb-col kb-a">${groups.fn}${groups.jog}</div><div class="kb-col kb-b">${groups.dsp}${groups.cur}</div><div class="kb-col kb-c">${groups.mod}</div></div>
+        <div class="kb-band kb-bot"><div class="kb-col kb-a">${groups.ovr}</div><div class="kb-col kb-b">${groups.alp}</div><div class="kb-col kb-c">${groups.num}</div></div>
+      </div></div>
     </div>
+  </div>
+  <div class="hp-side" aria-label="Pendant right side panel">
+    <button type="button" class="hp-sb" data-k="USB" title="USB port">${icon.usb}<small>USB</small></button>
+    <button type="button" class="hp-ks" data-k="MEMORY_LOCK" title="MEMORY LOCK key switch"><span class="ks-ic">${icon.mem}${icon.lock}</span><span class="ks"><i></i></span><small id="hpMemLbl">UNLOCKED</small></button>
+    <button type="button" class="hp-ks" data-k="SETUP_MODE" title="SETUP MODE key switch: locked = RUN mode, unlocked = SETUP mode"><span class="ks-ic">${icon.wrench}${icon.lock}</span><span class="ks"><i></i></span><small id="hpSetupLbl">RUN</small></button>
+    <button type="button" class="hp-sb" data-k="SECOND_HOME" title="SECOND HOME">${icon.home2}<small>2ND HOME</small></button>
+    <button type="button" class="hp-sb" data-k="AUTO_DOOR" title="AUTO DOOR OVERRIDE (if equipped)">${icon.door}<small>DOOR</small></button>
+    <button type="button" class="hp-sb" data-k="WORK_LIGHT" title="WORK LIGHT">${icon.bulb}<small>LIGHT</small></button>
+  </div>
   </div>`;
   return {
     screen: root.querySelector('#hsScreen'),
