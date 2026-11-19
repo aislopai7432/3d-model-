@@ -113,7 +113,7 @@ function header(name, vals, tool, inch) {
   return L;
 }
 
-const ff = (v) => String(Math.round(v * 10) / 10).replace(/\.0$/, '') + '.';
+const ff = (v) => { const r = Math.round(v * 10) / 10; return Number.isInteger(r) ? `${r}.` : r.toFixed(1); };
 
 // ctx: { inch, toolDia(n) -> diameter in display units, toolDesc(n) }
 export function generate(tpl, vals, ctx) {
@@ -130,8 +130,8 @@ export function generate(tpl, vals, ctx) {
     out.push(`Z${f(r)}`);
   };
   const toolEnd = () => {
-    out.push('G00 G90 G53 Z0. M09');
-    out.push('M05');
+    out.push('M09');
+    out.push('G53 G49 Z0. M05');
   };
   if (tpl.id === 'face') {
     const T = Math.round(vals.T);
@@ -218,6 +218,16 @@ export function generate(tpl, vals, ctx) {
       if (Rf < 0) return err(`The pocket is smaller than the tool (Ø${f(D)})`);
       out.push(...header('Circular Pocket', vals, null, inch));
       toolStart(T, vals.S, xc, yc, vals.R);
+      if (ctx.haas) {
+        // G13 counter-clockwise circular pocket: I first radius, K finish radius, Q step, D tool offset,
+        // G91 Z step per pass repeated L times
+        const step = (0 - vals.Z) / levels.length;
+        out.push(`G01 Z0. F${fz}`);
+        out.push(`G13 G91 Z${f(-step)} I${f(Math.min(r + ae, vals.P / 2))} K${f(vals.P / 2)} Q${f(ae)} D${String(T).padStart(2, '0')} L${levels.length} F${fr}`);
+        out.push(`G90 G00 Z${f(vals.R)}`);
+        toolEnd();
+        return { lines: out };
+      }
       const ramp = Math.min(Rf, D * 0.4);
       levels.forEach((z, li) => {
         const zPrev = li ? levels[li - 1] : 0;
@@ -248,9 +258,17 @@ export function generate(tpl, vals, ctx) {
     if (vals.Z >= vals.R) return err('Z (hole depth) must be below the R plane');
     out.push(...header('Drilling', vals, null, inch));
     const A = Math.round(vals.A || 0);
+    const bolt = ctx.haas && Math.round(vals.M) === 2;
     const holes = (cyc) => {
-      out.push(`${cyc} X${f(pts[0][0])} Y${f(pts[0][1])}`.replace(/^/, ''));
-      for (let i = 1; i < pts.length; i++) out.push(`X${f(pts[i][0])} Y${f(pts[i][1])}`);
+      if (bolt) {
+        // Haas bolt circle: the cycle line with L0 (no hole at the centre), then G70
+        out.push(`G00 X${f(vals.X)} Y${f(vals.Y)}`);
+        out.push(`${cyc} L0`);
+        out.push(`G70 I${f(vals.I)} J${f(vals.J)} L${Math.max(1, Math.round(vals.L))}`);
+      } else {
+        out.push(`${cyc} X${f(pts[0][0])} Y${f(pts[0][1])}`);
+        for (let i = 1; i < pts.length; i++) out.push(`X${f(pts[i][0])} Y${f(pts[i][1])}`);
+      }
       out.push('G80');
     };
     if (A > 0) {

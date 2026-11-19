@@ -9,6 +9,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MACHINE } from '../config.js';
 import { labelTexture, hazardTexture } from './textures.js';
+import { GROUPS as HAAS_GROUPS } from '../ui/haas/haas-keys.js';
 
 const TT = MACHINE.tableTopY; // 930
 const GAUGE0 = TT + MACHINE.gaugeAtZ0; // world Y of the gauge line at Z0 (1430)
@@ -677,6 +678,7 @@ export class MachineModel {
   // ---------- control pendant
   buildPendant() {
     const M = this.M;
+    const c0 = this.clickables.length;
     const P = new THREE.Group();
     P.name = 'pendant';
     this.pendant = P;
@@ -761,6 +763,108 @@ export class MachineModel {
     // mode selector knob
     this.cyl(26, 20, M.black, 160, -110, 50, body, 'z', 24);
     this.bx(155, -130, 60, 165, -90, 66, M.chrome, body);
+    this.p808 = { body, canvas: this.screenCanvas, tex: this.screenTex, click: this.clickables.splice(c0) };
+    this.clickBase = this.clickables.slice();
+    this.buildHaasPendant(P);
+    this.setControlStyle('808d');
+  }
+
+  // NGC-style pendant: screen on top, keyboard below, power / E-STOP / handle / cycle start on the left,
+  // beacon on top. Same arm and position as the 808D-style panel.
+  buildHaasPendant(P) {
+    const M = this.M;
+    const click = [];
+    const body = new THREE.Group();
+    body.position.set(990, 1630, 990);
+    body.rotation.set(-0.12, -0.32, 0);
+    P.add(body);
+    const shell = new THREE.MeshStandardMaterial({ color: 0xd9dcdf, roughness: 0.42, metalness: 0.25 });
+    this.bx(-270, -340, -45, 270, 340, 38, shell, body, 22);
+    this.bx(-262, -332, -52, 262, 332, -44, M.paintDark, body, 10);
+    this.bx(-15, 340, -20, 15, 380, 20, M.paintDark, body);
+    // screen
+    this.bx(-148, 18, 34, 258, 332, 42, M.black, body, 6);
+    const cv = document.createElement('canvas');
+    cv.width = 800;
+    cv.height = 600;
+    const tex = new THREE.CanvasTexture(cv);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(392, 294), new THREE.MeshBasicMaterial({ map: tex, toneMapped: false }));
+    screen.position.set(55, 175, 43);
+    body.add(screen);
+    // keyboard (a printed key plate)
+    const kc = document.createElement('canvas');
+    kc.width = 1024;
+    kc.height = 860;
+    drawHaasKeyboard(kc);
+    const ktex = new THREE.CanvasTexture(kc);
+    ktex.colorSpace = THREE.SRGBColorSpace;
+    ktex.anisotropy = 4;
+    const kb = new THREE.Mesh(new THREE.PlaneGeometry(404, 340), new THREE.MeshStandardMaterial({ map: ktex, roughness: 0.55, metalness: 0.05 }));
+    kb.position.set(55, -160, 39.5);
+    body.add(kb);
+    const lab = (txt, x, y, w = 96, col = '#202326') => {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(w, w * 0.18), new THREE.MeshBasicMaterial({ map: labelTexture([txt], { w: 256, h: 46, bg: '#d9dcdf', fg: col, font: '700 28px Arial' }) }));
+      m.position.set(x, y, 39);
+      body.add(m);
+    };
+    lab('VMC-MINI', -205, 312, 100, '#33373b');
+    // power on / off
+    lab('POWER ON', -232, 272, 52);
+    lab('POWER OFF', -178, 272, 52);
+    this.cyl(16, 10, M.green, -232, 248, 42, body, 'z', 20);
+    this.cyl(16, 10, M.red, -178, 248, 42, body, 'z', 20);
+    // E-STOP
+    lab('EMERGENCY STOP', -205, 196, 100);
+    const ring = this.cyl(44, 8, M.yellow, -205, 140, 42, body, 'z', 32);
+    ring.userData.keep = true;
+    this.haasEstop = new THREE.Group();
+    this.haasEstop.position.set(-205, 140, 46);
+    body.add(this.haasEstop);
+    const stem = this.cyl(15, 20, M.red, 0, 0, 10, this.haasEstop, 'z', 20);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(32, 28, 14, 0, Math.PI * 2, 0, Math.PI / 2), M.red);
+    cap.rotation.x = Math.PI / 2;
+    cap.position.z = 18;
+    cap.scale.y = 0.55;
+    this.haasEstop.add(cap);
+    for (const m of [stem, cap]) { m.userData.action = 'estop'; m.userData.keep = true; click.push(m); }
+    // jog handle
+    lab('HANDLE JOG', -205, 70, 80);
+    this.cyl(46, 22, M.chrome, -205, 10, 48, body, 'z', 40).userData.keep = true;
+    this.cyl(38, 4, M.paint, -205, 10, 60, body, 'z', 40);
+    this.cyl(7, 24, M.black, -205, 40, 70, body, 'z', 12);
+    // cycle start / feed hold
+    lab('CYCLE START', -232, -112, 56);
+    lab('FEED HOLD', -178, -112, 52);
+    const btn = (x, mat, action) => {
+      this.bx(x - 24, -166, 38, x + 24, -128, 44, M.chrome, body, 4);
+      const b = this.bx(x - 19, -162, 42, x + 19, -132, 52, mat, body, 4);
+      b.userData.action = action;
+      b.userData.keep = true;
+      click.push(b);
+      return b;
+    };
+    this.haasCycle = btn(-232, M.green.clone(), 'cycleStart');
+    this.haasHold = btn(-178, M.red.clone(), 'feedHold');
+    // beacon on top
+    this.bx(196, 340, -18, 244, 352, 18, M.paintDark, body, 3);
+    this.haasBeaconMat = new THREE.MeshStandardMaterial({ color: 0xe8ecef, emissive: 0x000000, transparent: true, opacity: 0.85, roughness: 0.25 });
+    this.cyl(18, 46, this.haasBeaconMat, 220, 376, 0, body, 'y', 20).userData.keep = true;
+    this.pHaas = { body, canvas: cv, tex, click };
+  }
+
+  setControlStyle(style) {
+    const haas = style === 'haas';
+    if (this.controlStyle === style) return;
+    this.controlStyle = style;
+    const on = haas ? this.pHaas : this.p808, off = haas ? this.p808 : this.pHaas;
+    on.body.visible = true;
+    off.body.visible = false;
+    this.pendantBody = on.body;
+    this.screenCanvas = on.canvas;
+    this.screenTex = on.tex;
+    this.clickables = [...this.clickBase, ...on.click];
   }
 
   buildStackLight() {
@@ -898,6 +1002,23 @@ export class MachineModel {
     this.holdBtn.material.emissive.setHex(st === 'hold' ? 0xff9a1a : 0x000000);
     this.holdBtn.material.emissiveIntensity = 1.2;
     this.estopBtn.position.z = s.estop ? 40 : 48;
+    if (s.control) this.setControlStyle(s.control);
+    if (this.controlStyle === 'haas') {
+      // beacon: off idle, solid green running, flashing green stopped / waiting, flashing red alarm
+      const b = s.beacon || 'off';
+      const on = b === 'green' || ((b === 'green-flash' || b === 'red' || b === 'yellow') && blink > 0.5);
+      const col = b.startsWith('green') ? 0x22e055 : b === 'red' ? 0xff2a2a : b === 'yellow' ? 0xffc21a : 0;
+      this.haasBeaconMat.emissive.setHex(on ? col : 0);
+      this.haasBeaconMat.emissiveIntensity = on ? 2.4 : 0;
+      this.stack.green.emissiveIntensity = b === 'green' ? 2.2 : b === 'green-flash' ? 2.2 * blink : 0;
+      this.stack.amber.emissiveIntensity = b === 'yellow' ? 2.2 * blink : 0;
+      this.stack.red.emissiveIntensity = b === 'red' ? 2.4 * blink : 0;
+      this.haasCycle.material.emissive.setHex(st === 'running' ? 0x1fbf55 : 0x000000);
+      this.haasCycle.material.emissiveIntensity = 1.2;
+      this.haasHold.material.emissive.setHex(st === 'hold' ? 0xff3a2a : 0x000000);
+      this.haasHold.material.emissiveIntensity = 1.2;
+      this.haasEstop.position.z = s.haasEstop ? 38 : 46;
+    }
   }
 
   setLights(on) {
@@ -920,4 +1041,57 @@ export class MachineModel {
     out.copy(n.tip);
     return this.head.localToWorld(out);
   }
+}
+
+// The NGC-style key plate as a texture for the 3D pendant (same groups and legends as the HTML pendant).
+function drawHaasKeyboard(cv) {
+  const g = cv.getContext('2d');
+  const W = cv.width, H = cv.height;
+  g.fillStyle = '#cfd0d2';
+  g.fillRect(0, 0, W, H);
+  const u = W / 14.3, pad = u * 0.25;
+  const by = (id) => HAAS_GROUPS.find((x) => x.id === id);
+  const plate = { grey: '#c5c6c8', light: '#c5c6c8', none: '#c5c6c8', black: '#151515', blue: '#0e92c8' };
+  const text = (html) => html.replace(/<i class="sh">[^<]*<\/i>/g, '').replace(/<br>/g, '\n').replace(/<svg[\s\S]*?<\/svg>/g, '').replace(/<[^>]+>/g, ' ').replace(/[ \t]+/g, ' ').trim();
+  const drawGroup = (grp, x, y, w) => {
+    const rows = Math.ceil(grp.keys.reduce((n, k) => n + (k.span || 1), 0) / grp.cols);
+    const kh = u * 0.62, gap = u * 0.14, title = grp.title ? u * 0.42 : 0;
+    const h = title + rows * kh + (rows - 1) * gap + u * 0.26;
+    g.fillStyle = plate[grp.plate] || '#c5c6c8';
+    g.beginPath(); g.roundRect(x, y, w, h, 8); g.fill();
+    g.strokeStyle = grp.plate === 'black' ? '#000' : '#6d7074'; g.lineWidth = 1.5; g.stroke();
+    if (grp.title) { g.fillStyle = '#fff'; g.font = `700 ${u * 0.3}px Arial`; g.textAlign = 'center'; g.fillText(grp.title, x + w / 2, y + u * 0.36); }
+    const kw = (w - u * 0.24 - (grp.cols - 1) * gap * 0.9) / grp.cols;
+    let col = 0, row = 0;
+    for (const k of grp.keys) {
+      const span = k.span || 1;
+      const kx = x + u * 0.12 + col * (kw + gap * 0.9), ky = y + title + u * 0.12 + row * (kh + gap);
+      const ww = kw * span + gap * 0.9 * (span - 1);
+      if (k.text) {
+        g.fillStyle = '#fff'; g.font = `700 ${u * 0.22}px Arial`; g.textAlign = 'center'; g.fillText(k.text, kx + ww / 2, ky + kh * 0.62);
+      } else {
+        const cls = k.cls || 'g';
+        g.fillStyle = cls.startsWith('r') ? '#e8590c' : cls.startsWith('t') ? '#49c2e2' : cls.startsWith('w') ? '#f4f4f4' : grp.plate === 'black' ? '#a3a4a7' : '#bfc0c3';
+        g.beginPath(); g.roundRect(kx, ky, ww, kh, 6); g.fill();
+        g.strokeStyle = '#f8f8f8'; g.lineWidth = 1.5; g.stroke();
+        const lines = text(k.label).split('\n');
+        const fs = cls.includes('f') && !cls.includes('fn') ? u * 0.3 : cls.includes('ch') ? u * 0.28 : u * 0.14;
+        g.fillStyle = '#222'; g.font = `600 ${fs}px Arial`; g.textAlign = 'center';
+        lines.forEach((l, i) => g.fillText(l.slice(0, 9), kx + ww / 2, ky + kh / 2 + (i - (lines.length - 1) / 2) * fs * 1.05 + fs * 0.35));
+      }
+      col += span;
+      if (col >= grp.cols) { col = 0; row++; }
+    }
+    return y + h + u * 0.18;
+  };
+  const top = pad, x0 = pad;
+  let y = drawGroup(by('function'), x0, top, u * 4.15);
+  y = drawGroup(by('jog'), x0, y, u * 4.15);
+  let y2 = drawGroup(by('display'), x0 + u * 4.35, top, u * 4.05);
+  y2 = drawGroup(by('cursor'), x0 + u * 4.55, y2, u * 3.85);
+  const y3 = drawGroup(by('modes'), x0 + u * 8.6, top, u * 5.25);
+  const yb = Math.max(y, y2, y3) + u * 0.05;
+  drawGroup(by('overrides'), x0, yb, u * 4.05);
+  drawGroup(by('alpha'), x0 + u * 4.25, yb, u * 6.1);
+  drawGroup(by('numeric'), x0 + u * 10.55, yb, u * 3.25);
 }

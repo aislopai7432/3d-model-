@@ -13,6 +13,7 @@ import { buildPendant, CHARS, PHYS, CHAR_KEY } from './haas-keys.js';
 import { VPS_TEMPLATES, defaults as vpsDefaults, generate as vpsGenerate } from './haas-vps.js';
 import { paintScreen, drawPendantTexture, ALARM_TEXT, SETTINGS_GROUPS, settingDefs, haasCodes } from './haas-screen.js';
 import { haasDefault } from '../../gcode/haas.js';
+import { EXAMPLES_HAAS } from '../../gcode/examples-haas.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const STORE = 'milllab.haas';
@@ -282,7 +283,8 @@ export class HaasControl {
     else {
       const leftW = Math.max(74, Math.min(120, W * 0.12));
       root.style.setProperty('--lw', leftW + 'px');
-      k = Math.min((W - leftW - 26) / 17.6, (H * 0.6 - 24) / 12.7);
+      const sideW = 44;
+      k = Math.min((W - leftW - sideW - 60) / 14.75, (H * 0.53 - 30) / 10.4);
       k = Math.max(22, Math.min(54, k));
     }
     root.style.setProperty('--k', k.toFixed(2) + 'px');
@@ -325,7 +327,7 @@ export class HaasControl {
 
   onLog(msg, lvl) {
     if (!this.active) return;
-    if (/^(Mode |MDA: )/.test(msg)) return;
+    if (/^(Mode |MDA: |Control ready)/.test(msg)) return;
     this.status = { text: msg, lvl, t: performance.now() };
     this.paintSoon();
   }
@@ -589,11 +591,13 @@ export class HaasControl {
       MEMORY_LOCK: this.st.memLock, SETUP_MODE: this.st.setup, WORK_LIGHT: this.app.settings.lights !== false,
       POWER_ON: this.power, ESTOP: this.estopLatched,
     };
-    const key = Object.entries(lit).map(([k, v]) => (v ? k : '')).join(',') + '|' + this.power;
+    const key = Object.entries(lit).map(([k, v]) => (v ? k : '')).join(',') + '|' + this.power + this.handleAxis + this.incIdx + this.handleMode;
     if (key === this._litKey) return;
     this._litKey = key;
     for (const [id, els] of this.keyEls) for (const el of els) el.classList.toggle('lit', !!lit[id] && (this.power || id === 'POWER_ON'));
     this.root.classList.toggle('pwr-off', !this.power);
+    const hc = $('#hpHandleCap');
+    if (hc) hc.textContent = this.handleMode ? { scroll: 'SCROLL', feed: 'FEED %', spindle: 'SPINDLE %' }[this.handleMode] : `${this.handleAxis.toUpperCase()}  ${this.inch ? INC_IN[this.incIdx] : INC_MM[this.incIdx]}`;
     const ml = $('#hpMemLbl'), sl = $('#hpSetupLbl');
     if (ml) ml.textContent = this.st.memLock ? 'LOCKED' : 'UNLOCKED';
     if (sl) sl.textContent = this.st.setup ? 'SETUP' : 'RUN';
@@ -692,6 +696,11 @@ export class HaasControl {
   // ------------------------------------------------------------------ modes
   selectMode(m) {
     const c = this.c;
+    // pressing the mode key of a tabbed display again selects the next tab
+    if (m === this.mode && (m === 'LIST' || m === 'EDIT')) {
+      const d = m === 'LIST' ? 'list' : 'edit';
+      if (this.disp === d) { this.tab[d] = (this.tab[d] + 1) % DISPLAY_TABS[d].length; this.onTab(d); return; }
+    }
     const target = CTRL_MODE[m];
     if (target && target !== c.mode) {
       if (!c.setMode(target)) {
@@ -951,7 +960,7 @@ export class HaasControl {
     if (d === 'commands') {
       if (dx && this.tab.commands !== 1) { this.tab.commands = clampI(this.tab.commands + dx, 0, 4); return; }
       const cur = this.cursor('cmd' + this.tab.commands);
-      const max = this.tab.commands === 2 ? 299 : this.tab.commands === 4 ? MACHINE.atcPockets - 1 : this.tab.commands === 1 ? 5 : 7;
+      const max = this.tab.commands === 2 ? MACRO_ROWS.length - 1 : this.tab.commands === 4 ? MACHINE.atcPockets - 1 : this.tab.commands === 1 ? 5 : 7;
       cur.row = clampI(cur.row + dy, 0, max);
       return;
     }
@@ -1349,7 +1358,8 @@ export class HaasControl {
   lpFiles() {
     const app = this.app;
     if (this.tab.list === 1) {
-      return [...VPS_SAMPLES().map((s) => ({ name: s.file, onum: s.onum, comment: s.comment, size: s.code().length, usb: 'vps', id: s.id })),
+      return [...EXAMPLES_HAAS.map((e) => ({ name: e.file.replace(/\.NC$/i, '.MPF'), onum: progHead(e.code).onum, comment: progHead(e.code).comment || e.name, size: e.code.length, usb: 'haas', id: e.id })),
+        ...VPS_SAMPLES().map((s) => ({ name: s.file, onum: s.onum, comment: s.comment, size: s.code().length, usb: 'vps', id: s.id })),
         ...EXAMPLES_808.map((e) => ({ name: e.file, onum: '', comment: e.name, size: (e.code || '').length, usb: 'ex', id: e.id }))]
         .filter((f) => !this.lp.search || (f.name + ' ' + f.comment).toUpperCase().includes(this.lp.search));
     }
@@ -1399,6 +1409,8 @@ export class HaasControl {
     if (this.c.exec?.kind === 'program') return this.say('The active program is running', 'warn');
     if (f.usb === 'ex') {
       app.loadExample808(f.id);
+    } else if (f.usb === 'haas') {
+      app.loadExampleHaas(f.id);
     } else if (f.usb === 'vps') {
       const s = VPS_SAMPLES().find((x) => x.id === f.id);
       const name = app.programs.has(s.file) ? s.file : s.file;
@@ -1507,7 +1519,7 @@ export class HaasControl {
     if (this.locked('programs')) return;
     const store = this.app.programs;
     if (f.usb) {
-      const text = f.usb === 'vps' ? VPS_SAMPLES().find((x) => x.id === f.id).code() : (() => { const e = EXAMPLES_808.find((x) => x.id === f.id); return this.app.programs.get(f.name) ?? (e.lazy && !e.code ? (Object.assign(e, e.lazy()), e.code) : e.code); })();
+      const text = f.usb === 'haas' ? EXAMPLES_HAAS.find((x) => x.id === f.id).code : f.usb === 'vps' ? VPS_SAMPLES().find((x) => x.id === f.id).code() : (() => { const e = EXAMPLES_808.find((x) => x.id === f.id); return this.app.programs.get(f.name) ?? (e.lazy && !e.code ? (Object.assign(e, e.lazy()), e.code) : e.code); })();
       const name = store.has(f.name) ? store.uniqueName(f.name) : f.name;
       store.put(name, text);
       return this.say(`${f.name} copied to Memory as ${name}`);
@@ -1753,12 +1765,13 @@ export class HaasControl {
     if (d === 'setting') return this.settingEnter();
     if (d === 'edit' && this.tab.edit === 1) return this.vpsEnter();
     if (d === 'commands' && this.tab.commands === 2) {
-      const r = this.cursor('cmd2').row;
+      const r = MACRO_ROWS[this.cursor('cmd2').row];
       const v = parseFloat(inp);
       if (!isFinite(v)) return this.say('Type a value, then ENTER', 'warn');
       if (this.set(120)) return this.say('Macro variables are locked (Setting 120)', 'warn');
-      this.app.R[r] = v;
-      this.app.saveR();
+      this.app.macroVars[r] = v;
+      this.app.saveVars();
+      this.app.scheduleCompile();
       this.input = '';
       return this.say(`#${r} = ${v}`);
     }
@@ -2243,7 +2256,7 @@ export class HaasControl {
     const tpl = VPS_TEMPLATES.find((t) => t.id === this.vps.tpl);
     const app = this.app;
     const res = vpsGenerate(tpl, this.vps.vals, {
-      inch: this.inch,
+      inch: this.inch, haas: haasDialect() === 'haas',
       toolDia: (n) => { const t = app.tools.find((x) => x.number === n); return t ? this.toD(this.toolGeom(t).dg) : 0; },
       toolDesc: (n) => { const t = app.tools.find((x) => x.number === n); return t ? t.name.toUpperCase().replace(/[()]/g, '').replace(/Ø/g, 'D') : 'NO TOOL'; },
     });
@@ -2333,6 +2346,7 @@ export class HaasControl {
   }
 }
 
+export const MACRO_ROWS = [...Array.from({ length: 100 }, (_, i) => 100 + i), ...Array.from({ length: 500 }, (_, i) => 500 + i)];
 const CTRL_MODE_INV = { AUTO: 'MEM', MDA: 'MDI', JOG: 'JOG', REF: 'ZERO' };
 
 function clampI(v, a, b) {
@@ -2403,7 +2417,7 @@ export function VPS_SAMPLES() {
     code: () => {
       const tpl = VPS_TEMPLATES.find((t) => t.id === tplId);
       const v = { ...vpsDefaults(tpl, false), ...vals };
-      const res = vpsGenerate(tpl, v, { inch: false, toolDia: (n) => ({ 1: 50, 2: 10, 3: 6, 4: 10, 5: 6.8 }[n] || 10), toolDesc: (n) => ({ 1: 'FACE MILL D50', 2: 'END MILL D10', 3: 'END MILL D6', 4: 'SPOT DRILL D10', 5: 'DRILL D6.8' }[n] || 'TOOL') });
+      const res = vpsGenerate(tpl, v, { inch: false, haas: haasDialect() === 'haas', toolDia: (n) => ({ 1: 50, 2: 10, 3: 6, 4: 10, 5: 6.8 }[n] || 10), toolDesc: (n) => ({ 1: 'FACE MILL D50', 2: 'END MILL D10', 3: 'END MILL D6', 4: 'SPOT DRILL D10', 5: 'DRILL D6.8' }[n] || 'TOOL') });
       return ['%', `O${onum} (${comment})`, ...(res.lines || []), 'M30', '%'].join('\n') + '\n';
     },
   });

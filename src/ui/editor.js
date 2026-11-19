@@ -3,6 +3,7 @@
 // line positions uniform for the gutter, error bands and the execution-line highlight.
 import { highlightTokens } from '../gcode/parser.js';
 import { highlightSiemens } from '../gcode/siemens.js';
+import { highlightHaas } from '../gcode/haas.js';
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
@@ -162,7 +163,7 @@ export class Editor {
 
   lineHtml(text, errs) {
     if (!text) return '';
-    const spans = this.dialect === 'iso' ? highlightTokens(text) : highlightSiemens(text);
+    const spans = this.dialect === 'iso' ? highlightTokens(text) : this.dialect === 'haas' ? highlightHaas(text) : highlightSiemens(text);
     const bad = errs ? errs.filter((e) => e.level === 'err' && e.len > 0) : [];
     let col = 0;
     let out = '';

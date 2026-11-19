@@ -5,7 +5,8 @@ import { MACHINE, MATERIALS, ACCURACY } from '../../config.js';
 import { fmtTime } from '../../sim/controller.js';
 import { surfaceSpeed, chipLoad } from '../../sim/tooling.js';
 import { VPS_TEMPLATES, illustration } from './haas-vps.js';
-import { DISPLAY_TABS, TOOL_COLS, HAAS_TYPES, lineWords, progHead, haasDialect } from './haas.js';
+import { DISPLAY_TABS, TOOL_COLS, HAAS_TYPES, lineWords, progHead, haasDialect, MACRO_ROWS } from './haas.js';
+import { HAAS_ALARMS } from '../../gcode/haas.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -20,6 +21,7 @@ export const ALARM_TEXT = {
   339: 'MULTIPLE CODES', 340: 'CUTTER COMP BEGIN WITH G02 OR G03', 360: 'TOOL CHANGER DISABLED', 363: 'COOLANT LOCKED OFF', 383: 'INCH IS NOT SELECTED',
   384: 'METRIC IS NOT SELECTED', 403: 'TOO MANY PROGS', 436: 'DISK FILE NOT FOUND', 508: 'DIVISION BY ZERO',
 };
+for (const [k, v] of Object.entries(HAAS_ALARMS)) if (!(k in ALARM_TEXT)) ALARM_TEXT[k] = v;
 
 export const SETTINGS_GROUPS = ['General', 'Program', 'Offsets / Tools', 'Axes / Door / Spindle', 'Simulator (not on the real control)'];
 
@@ -54,7 +56,7 @@ export function settingDefs(h) {
     { g: 3, n: 292, name: 'Door Open Spindle Speed Limit', type: 'num', min: 0, max: MACHINE.maxRpm, def: 750 },
     { g: 3, n: 51, name: 'Door Hold Override (legacy)', type: 'bool', def: false, ro: true },
     { g: 4, n: 'S1', name: 'Control Style', ...list(['NGC', '808D'], () => (app.settings.control === '808d' ? '808D' : 'NGC'), (v) => h.setControl(v === '808D' ? '808d' : 'haas')) },
-    { g: 4, n: 'S2', name: 'Default Dialect (no %/O header)', ...list(['SIEMENS', 'ISO'], () => (app.settings.dialect === 'iso' ? 'ISO' : 'SIEMENS'), (v) => { app.settings.dialect = v === 'ISO' ? 'iso' : 'siemens'; app.save(); app.compile(); }) },
+    { g: 4, n: 'S2', name: 'Program Dialect', type: 'list', opts: ['HAAS'], ro: true, get: () => (haasDialect() === 'haas' ? 'HAAS (Siemens-mode files still run)' : 'ISO') },
     { g: 4, n: 'S3', name: 'Fresh Blank At Each MEM Start', ...list(['OFF', 'ON'], () => (app.settings.freshBlank ? 'ON' : 'OFF'), (v) => h.ui.setOption('freshBlank', v === 'ON')) },
     { g: 4, n: 'S4', name: 'Simulation Accuracy', ...list(Object.keys(ACCURACY).map((k) => k.toUpperCase()), () => app.settings.accuracy.toUpperCase(), (v) => h.ui.setOption('accuracy', v.toLowerCase())) },
     { g: 4, n: 'S5', name: 'Show Chips', ...list(['OFF', 'ON'], () => (app.settings.showChips ? 'ON' : 'OFF'), (v) => h.ui.setOption('showChips', v === 'ON')) },
@@ -347,9 +349,12 @@ function mainCommands(h) {
   } else if (tab === 2) {
     const cur = h.cursor('cmd2');
     const rows = rowsFor(h, 'main', h.rowH * 5);
-    const top = win(h, 'cmd2', cur.row, 300, rows);
+    const top = win(h, 'cmd2', cur.row, MACRO_ROWS.length, rows);
     let t = '';
-    for (let i = top; i < Math.min(300, top + rows); i++) t += `<tr class="${i % 2 ? 'alt' : ''}"><td class="tno">#${i}</td><td class="${i === cur.row ? 'cur' : ''} num" data-row="${i}" data-cur="cmd2">${+app.R[i].toFixed(6)}</td></tr>`;
+    for (let i = top; i < Math.min(MACRO_ROWS.length, top + rows); i++) {
+      const n = MACRO_ROWS[i], v = app.macroVars[n];
+      t += `<tr class="${i % 2 ? 'alt' : ''}"><td class="tno">#${n}</td><td class="${i === cur.row ? 'cur' : ''} num" data-row="${i}" data-cur="cmd2">${v == null ? '<span class="dimtxt">(empty)</span>' : +(+v).toFixed(6)}</td></tr>`;
+    }
     body = `<table class="ht"><thead><tr><th>Variable</th><th>Value</th></tr></thead><tbody>${t}</tbody></table>`;
     fk = [['ENTER', 'Set Value']];
   } else if (tab === 3) {

@@ -136,7 +136,7 @@ export class UI {
       resetAll: () => {
         if (!confirm('Reset all settings, tools, offsets, R variables and stored programs to their defaults?')) return;
         try {
-          for (const k of ['milllab.v1', 'milllab.programs.v1', 'milllab.r', 'milllab.layout', 'milllab.game', 'milllab.haas']) localStorage.removeItem(k);
+          for (const k of ['milllab.v1', 'milllab.programs.v1', 'milllab.r', 'milllab.layout', 'milllab.game', 'milllab.haas', 'milllab.vars']) localStorage.removeItem(k);
         } catch { /* ignore */ }
         location.reload();
       },
@@ -936,7 +936,7 @@ export class UI {
       pe.textContent = res.warnings.length ? `OK · ${res.warnings.length} warning${res.warnings.length > 1 ? 's' : ''}` : 'No errors';
       pe.className = 'ok';
     }
-    $('#psDialect').textContent = res.dialect === 'iso' ? 'ISO dialect (G291)' : 'Siemens mode';
+    $('#psDialect').textContent = res.dialect === 'iso' ? 'ISO dialect (G291)' : res.dialect === 'haas' ? 'Haas (NGC)' : 'Siemens mode';
     $('#psTime').textContent = `est. ${fmtTime(res.totalTime)}`;
     const items = [...res.errors.map((x) => ({ ...x, lvl: 'err' })), ...res.warnings.map((x) => ({ ...x, lvl: 'warn' }))].slice(0, 30);
     const dl = $('#diagList');
