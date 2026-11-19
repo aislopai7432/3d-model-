@@ -2035,10 +2035,17 @@ export class HaasControl {
     }
     if (p.kind === 'form') {
       const f = p.fields[p.row];
-      if (CHARS[id]) { const ch = CHARS[id][this.shift || o.shift ? 1 : 0]; this.shift = false; f.v += ch; return true; }
+      if (CHARS[id]) {
+        const ch = CHARS[id][this.shift || o.shift ? 1 : 0];
+        this.shift = false;
+        // the suggested value is replaced by the first key typed into the field
+        if (!f.typed) { f.v = ''; f.typed = true; }
+        f.v += ch;
+        return true;
+      }
       if (id === 'SHIFT') { this.shift = !this.shift; return true; }
       if (id === 'SPACE') { f.v += ' '; return true; }
-      if (id === 'CANCEL') { if (f.v) f.v = f.v.slice(0, -1); else { this.popup = null; this.say('Cancelled'); } return true; }
+      if (id === 'CANCEL') { f.typed = true; if (f.v) f.v = f.v.slice(0, -1); else { this.popup = null; this.say('Cancelled'); } return true; }
       if (id === 'UP') { p.row = Math.max(0, p.row - 1); return true; }
       if (id === 'DOWN') { p.row = Math.min(p.fields.length - 1, p.row + 1); return true; }
       if (id === 'ENTER') {
