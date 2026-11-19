@@ -828,6 +828,11 @@ export class Tutorial {
     const el = tgt?.el;
     let rect = null;
     if (el && el.isConnected) {
+      // a form field scrolled out of its (scrolling) form: bring it into view once
+      if ((el.tagName === 'INPUT' || el.tagName === 'SELECT') && this._scrolledTo !== el) {
+        this._scrolledTo = el;
+        try { el.scrollIntoView({ block: 'nearest' }); } catch { /* ignore */ }
+      }
       const r = el.getBoundingClientRect();
       if (r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth && getComputedStyle(el).visibility !== 'hidden' && this.uncovered(el, r)) rect = r;
     }

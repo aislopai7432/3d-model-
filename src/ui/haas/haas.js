@@ -284,8 +284,8 @@ export class HaasControl {
       const leftW = Math.max(74, Math.min(120, W * 0.12));
       root.style.setProperty('--lw', leftW + 'px');
       const sideW = 44;
-      k = Math.min((W - leftW - sideW - 60) / 14.75, (H * 0.53 - 30) / 10.4);
-      k = Math.max(22, Math.min(54, k));
+      k = Math.min((W - leftW - sideW - 60) / 14.75, (H * 0.55 - 30) / 10.4);
+      k = Math.max(22, Math.min(60, k));
     }
     root.style.setProperty('--k', k.toFixed(2) + 'px');
   }
