@@ -255,7 +255,7 @@ em.wcur { font-style: normal; background: var(--orange); color: #000; }
 /* positions */
 .pos-big { display: grid; gap: .1em; padding: .2em .6em; }
 .pb-h { color: #1d4793; font-weight: 700; }
-.pos-big .pr { display: grid; grid-template-columns: 2.2em 1fr; align-items: baseline; font: 700 calc(var(--fs) * 3) "DejaVu Sans Mono", monospace; line-height: 1.12; }
+.pos-big .pr { display: grid; grid-template-columns: 2.2em 1fr; align-items: baseline; font: 700 calc(var(--fs) * 2.5) "DejaVu Sans Mono", monospace; line-height: 1.08; }
 .pos-big .pr span { text-align: right; }
 .pos-all { display: grid; grid-template-columns: repeat(2, 1fr); gap: .4em; }
 .pa { border: 1px solid #8fa3c2; background: #f2f8fc; }
@@ -292,11 +292,11 @@ em.wcur { font-style: normal; background: var(--orange); color: #000; }
 .lp-search { color: #1010e0; overflow: hidden; text-overflow: ellipsis; }
 .lp-search i { font-style: normal; background: #fff; border: 1px solid #999; padding: 0 .4em; color: #000; }
 .lpt td:nth-child(1) { width: 1.6em; text-align: center; }
-.lpt th:nth-child(1) { width: 1.6em; } .lpt th:nth-child(2) { width: 4.3em; } .lpt th:nth-child(5) { width: 3.7em; } .lpt th:nth-child(6) { width: 1.4em; }
+.lpt th:nth-child(1) { width: 1.6em; } .lpt th:nth-child(2) { width: 5.4em; } .lpt th:nth-child(5) { width: 3.7em; } .lpt th:nth-child(6) { width: 1.4em; }
 .lpt th:nth-child(4) { width: 34%; }
-.lp-foot { margin-top: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 0 .8em; font-size: calc(var(--fs) * .88); color: #222; }
-.lp-btns { width: 7.2em; display: flex; flex-direction: column; gap: 3px; }
-.lpb { display: grid; text-align: center; background: linear-gradient(#6a93d3, #3c6fb4); color: #fff; border-radius: 3px; padding: .15em 0; line-height: 1.15; }
+.lp-foot { margin-top: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 0 .8em; font-size: calc(var(--fs) * .8); color: #222; white-space: nowrap; overflow: hidden; }
+.lp-btns { width: 6.6em; display: flex; flex-direction: column; gap: 2px; font-size: calc(var(--fs) * .82); overflow: hidden; }
+.lpb { display: grid; text-align: center; background: linear-gradient(#6a93d3, #3c6fb4); color: #fff; border-radius: 3px; padding: 0; line-height: 1.12; }
 .lpb small { font-size: .8em; color: #dfe8ff; }
 .lpb.dis { background: #a9a9a9; color: #e8e8e8; }
 

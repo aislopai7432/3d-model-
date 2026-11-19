@@ -485,7 +485,7 @@ function mainHelp(h) {
 
 function mainList(h) {
   const files = h.lpFiles();
-  const rows = rowsFor(h, 'main', h.rowH * 8);
+  const rows = rowsFor(h, 'main', h.rowH * 6);
   const top = win(h, 'lp' + h.tab.list, h.lp.row, files.length, rows);
   const app = h.app;
   const body = files.slice(top, top + rows).map((f, k) => {
