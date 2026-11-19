@@ -250,7 +250,7 @@ function start(app) {
     const dt = Math.min(0.5, (now - last) / 1000); // wall-clock time so the break always lasts ~4 s
     last = now;
     if (t >= 0) {
-      t += dt;
+      t = window.__coffeeFreeze != null ? window.__coffeeFreeze * DUR : t + dt; // freeze hook for screenshots
       const f = t / DUR;
       // 0..0.18 raise, 0.18..0.8 hold + sip, 0.8..1 lower
       let up;
