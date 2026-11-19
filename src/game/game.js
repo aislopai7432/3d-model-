@@ -831,7 +831,9 @@ export class Game {
     app.sound.init();
     if (id === 'jobBoard') {
       const slot = this.ws.jobBoardSlotAt?.(hit.point) ?? -1;
-      if (slot >= 0 && PARTS[slot]) this.ui.openDrawing(PARTS[slot]);
+      // the tutorial job T01 is not pinned on the board: during the tutorial the board opens the list
+      const tutJob = this.tut?.active && ['openBoard', 'pickJob'].includes(this.tut.cur?.id);
+      if (slot >= 0 && PARTS[slot] && !tutJob) this.ui.openDrawing(PARTS[slot]);
       else this.ui.openJobs();
     } else if (id === 'stockRack') {
       if (this.carryPart) this.ui.toast('Take the finished part to the inspection bench first.', 'warn');

@@ -414,7 +414,9 @@ export class Tutorial {
         done: () => modal('jobs') || modal('drawing') || this.jobOn() },
       { id: 'pickJob', phase: 'Job', title: `Choose job ${P.id}`,
         text: () => `Every card is a drawing with its customer, material and blank size. Open <b>${esc(P.id)} · ${esc(P.title)}</b>, the tutorial job.`,
-        target: () => (modal('jobs') ? { el: $(`[data-job="${P.id}"]`), text: `Open ${P.id}` } : modal('drawing') ? null : { el: $('[data-g="jobs"]'), text: 'Open the job list (J)' }),
+        target: () => (modal('jobs') ? { el: $(`[data-job="${P.id}"]`), text: `Open ${P.id}` }
+          : modal('drawing') ? (g.ui.topModal().partId !== P.id ? { el: $('[data-dw="jobs"]'), text: `All jobs: open ${P.id}` } : null)
+          : { el: $('[data-g="jobs"]'), text: 'Open the job list (J)' }),
         done: () => (modal('drawing') && g.ui.topModal().partId === P.id) || this.jobOn() },
       { id: 'accept', phase: 'Job', title: 'Accept the job',
         text: () => `Press <b>Accept job</b>. This makes ${esc(P.id)} your current job and creates the program <b>JOB_${esc(P.id)}.MPF</b> at the control, already selected.`,
