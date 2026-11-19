@@ -12,6 +12,13 @@ import { StockMesh } from '../scene/stockmesh.js';
 import { GameUI } from './ui-game.js';
 import { partStore, zmapState, zmapFromState } from './partstore.js';
 import { ZMap } from '../sim/zmap.js';
+import { TUTORIAL_PART } from './tutorial-part.js';
+import { tutorialTemplate } from './tutorial-template.js';
+
+// Job lookup: the ten jobs on the board plus the tutorial job T01.
+export function findPart(id) {
+  return getPart(id) || (id === TUTORIAL_PART.id ? TUTORIAL_PART : null);
+}
 
 const KEY = 'milllab.game';
 const TC = MACHINE.tableCenter;
@@ -27,12 +34,18 @@ export const BLANKS = (() => {
     const k = `${b.x}x${b.y}x${b.z}-${b.material}`;
     if (!out.some((o) => o.key === k)) out.push({ ...b, key: k });
   };
-  for (const p of PARTS) add({ x: p.stock.x, y: p.stock.y, z: p.stock.z, material: p.material, protrusion: p.protrusion });
+  for (const p of [TUTORIAL_PART, ...PARTS]) add({ x: p.stock.x, y: p.stock.y, z: p.stock.z, material: p.material, protrusion: p.protrusion });
+  const order = { aluminium: 0, plastic: 1, brass: 2, steel: 3 };
+  const sort = (list) => list.sort((a, b) => order[a.material] - order[b.material] || a.x - b.x || a.y - b.y || a.z - b.z);
+  sort(out);
+  // near misses: right size wrong material, or right material wrong size (listed after the job blanks)
+  const n = out.length;
+  add({ x: 80, y: 50, z: 12, material: 'aluminium', protrusion: 8 });
+  add({ x: 80, y: 50, z: 16, material: 'brass', protrusion: 10 });
   add({ x: 100, y: 60, z: 26, material: 'aluminium', protrusion: 14 });
   add({ x: 120, y: 70, z: 16, material: 'steel', protrusion: 10 });
-  const order = { aluminium: 0, plastic: 1, brass: 2, steel: 3 };
-  out.sort((a, b) => order[a.material] - order[b.material] || a.x - b.x || a.y - b.y || a.z - b.z);
-  return out.map((b, i) => ({ ...b, id: `B${String(i + 1).padStart(2, '0')}` }));
+  const near = sort(out.splice(n));
+  return [...out, ...near].map((b, i) => ({ ...b, id: `B${String(i + 1).padStart(2, '0')}`, nearMiss: i >= n }));
 })();
 
 export const blankLabel = (b) => `${b.x} × ${b.y} × ${b.z} ${MATERIALS[b.material]?.short || b.material}`;
@@ -72,6 +85,7 @@ export class Game {
     this._tmpV = new THREE.Vector3();
     this.machinedSerial = -1;
     this.runSerial = -1;
+    this.tut = null; // the interactive tutorial (tutorial.js, loaded on demand)
 
     const v = app.viewer;
     v.scene.add(v.camera); // the hand-held item is a child of the camera
@@ -186,7 +200,7 @@ export class Game {
       } else if (carry) partStore.del('carry');
       if (plate) {
         const snap = this.deserSnap(plate.snap);
-        const part = getPart(plate.partId);
+        const part = findPart(plate.partId);
         if (snap && part) {
           this.showOnPlate(snap, part);
           if (plate.report) {
@@ -200,6 +214,50 @@ export class Game {
     this.updateHand();
     this.ui._objKey = '';
     this.ui.renderObjectives(this.objectives());
+    // resume a tutorial that was running when the page was left
+    if (this.s.tut?.active && this.mode === 'workshop') await this.startTutorial();
+    this.ui.syncTutorial();
+  }
+
+  // ------------------------------------------------------------------ tutorial (loaded on demand)
+  async startTutorial({ restart = false } = {}) {
+    if (this.mode !== 'workshop') this.setMode('workshop');
+    if (!this.tut) {
+      try {
+        const [{ Tutorial }, { TUTORIAL_PROGRAM_STEPS }] = await Promise.all([import('./tutorial.js'), import('./tutorial-part.js')]);
+        this.tut = new Tutorial(this, TUTORIAL_PART, TUTORIAL_PROGRAM_STEPS);
+      } catch (e) {
+        console.error(e);
+        this.ui.toast('The tutorial could not be loaded.', 'warn');
+        return;
+      }
+    }
+    this.ui.showHelp(false);
+    const st = this.s.tut;
+    if (restart || !st || st.finished || !st.step) {
+      this.resetTutorialWorld();
+      this.tut.restart();
+    } else this.tut.start(st.step);
+    this.ui.syncTutorial();
+  }
+
+  toggleTutorial() {
+    if (this.tut?.active) this.tut.setMin(!this.tut.min);
+    else this.startTutorial();
+  }
+
+  // Starting the tutorial again after finishing it: its old part leaves the inspection plate so the
+  // steps begin from scratch (a job in progress is kept, the tutorial then skips ahead).
+  resetTutorialWorld() {
+    const id = TUTORIAL_PART.id;
+    const p = this.s.prog;
+    const finished = !p || p.jobId !== id || p.done;
+    if (finished && this.plate?.part.id === id) {
+      this.clearPlate();
+      if (this.report?.part.id === id) this.report = null;
+      if (this.ms) this.ms.log = [];
+      this.markParts('plate');
+    }
   }
 
   // ------------------------------------------------------------------ persistence
@@ -224,7 +282,7 @@ export class Game {
     else this._saveT = setTimeout(write, 500);
   }
 
-  get job() { return this.s.jobId ? getPart(this.s.jobId) : null; }
+  get job() { return this.s.jobId ? findPart(this.s.jobId) : null; }
   get prog() { return this.s.prog && this.s.prog.jobId === this.s.jobId ? this.s.prog : null; }
   get manualBlanks() { return this.mode === 'workshop'; }
   get walking() { return this.mode === 'workshop' && !this.op && !this.measuring; }
@@ -299,6 +357,7 @@ export class Game {
 
   update(dt) {
     if (!(dt > 0)) dt = 0;
+    if (this.tut?.active) this.tut.update(dt);
     if (this.mode === 'workshop') {
       const p = this.prog;
       if (p && !p.done && !document.hidden) p.time = (p.time || 0) + dt;
@@ -570,7 +629,7 @@ export class Game {
 
   carryText() {
     if (this.carryPart) {
-      const p = this.carryPart.jobId ? getPart(this.carryPart.jobId) : null;
+      const p = this.carryPart.jobId ? findPart(this.carryPart.jobId) : null;
       return { icon: 'part', text: p ? `Machined part · ${p.id} ${p.title}` : `Machined part · ${blankLabel(this.carryPart.blank)}` };
     }
     if (this.s.carry?.kind === 'blank') return { icon: 'blank', text: `Blank · ${blankLabel(this.s.carry.blank)}` };
@@ -592,7 +651,7 @@ export class Game {
   }
 
   acceptJob(id) {
-    const part = getPart(id);
+    const part = findPart(id);
     if (!part) return;
     const app = this.app;
     const prev = this.s.jobId;
@@ -613,6 +672,7 @@ export class Game {
   }
 
   programTemplate(p) {
+    if (p.id === TUTORIAL_PART.id) return tutorialTemplate();
     const MAT = { aluminium: 'ALUMINIUM', steel: 'STEEL', brass: 'BRASS', plastic: 'ACETAL' };
     const face = r3(p.stock.z - p.size.z);
     return [
@@ -638,7 +698,7 @@ export class Game {
   }
 
   loadReference(id) {
-    const part = getPart(id);
+    const part = findPart(id);
     if (!part) return;
     const app = this.app;
     if (app.controller.exec) return this.ui.toast('Stop the running program first.', 'warn');
@@ -868,7 +928,7 @@ export class Game {
   placeOnPlate() {
     const snap = this.carryPart;
     if (!snap) return;
-    const part = getPart(snap.jobId) || this.job;
+    const part = findPart(snap.jobId) || this.job;
     if (!part) return this.ui.toast('Accept a job at the job board first: the inspection compares the part with its drawing.', 'warn', 5000);
     this.showOnPlate(snap, part);
     if (this.ms) this.ms.log = [];

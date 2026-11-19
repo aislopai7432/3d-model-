@@ -9,6 +9,7 @@ import { CYCLES } from '../gcode/sinucycles.js';
 import { findCall, formatCall } from '../ui/cycleforms.js';
 import { DRILL_POINT_K } from './parts.js';
 import { MATERIALS } from '../config.js';
+import { MARK_RE } from './tutorial-template.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -47,73 +48,31 @@ export function deriveSteps(part) {
   if (holes.length) {
     const h = holes[0];
     const tip = r3(-face - h.depth - (h.d / 2) * DRILL_POINT_K);
-    steps.push({ op: 'drill', cycle: 'CYCLE81', count: holes.length, holes: holes.map((x) => ({ id: x.id, x: x.x, y: x.y })), values: { RTP: 10, RFP: -face, SDIS: 2, DP: Math.round(tip * 100) / 100, DPR: '' } });
+    steps.push({ op: 'drill', cycle: 'CYCLE81', modal: true, count: 1, holes: holes.map((x) => ({ id: x.id, x: x.x, y: x.y })), values: { RTP: 10, RFP: -face, SDIS: 2, DP: Math.round(tip * 100) / 100, DPR: '' } });
   }
   return steps;
 }
 
-// Normalise TUTORIAL_PROGRAM_STEPS (any reasonable shape) to [{ op, cycle, values: {KEY: v}, keys, count }].
+// Normalise TUTORIAL_PROGRAM_STEPS (tutorial-part.js) to [{ op, cycle, modal, values: {KEY: v}, keys,
+// fields: {KEY: {label, why, edit}}, intro, count }]; anything missing is derived from the drawing.
 export function programSteps(part, given) {
   const derived = deriveSteps(part);
-  let list = [];
-  if (Array.isArray(given)) list = given;
-  else if (given && typeof given === 'object') list = Object.entries(given).map(([k, v]) => (v && typeof v === 'object' && !Array.isArray(v) && (v.cycle || v.name) ? { op: k, ...v } : { op: k, cycle: k, values: v }));
   const out = [];
-  for (const s of list) {
-    const cycle = String(s.cycle || s.name || s.op || '').toUpperCase();
+  for (const s of Array.isArray(given) ? given : []) {
+    const cycle = String(s.cycle || '').toUpperCase();
     if (!CYCLES[cycle]) continue;
-    const values = toKeyed(cycle, s.values || s.params || s.args || s.fields || {});
-    if (!Object.keys(values).length) continue;
-    const d = derived.find((x) => x.cycle === cycle) || derived.find((x) => CYCLES[x.cycle].params.length === CYCLES[cycle].params.length && x.op === 'drill' && /CYCLE8/.test(cycle));
-    const op = /CYCLE71/.test(cycle) ? 'face' : /POCKET/.test(cycle) ? 'pocket' : /CYCLE8/.test(cycle) ? 'drill' : String(s.op || cycle).toLowerCase();
-    out.push({ ...(d || {}), op, cycle, values: { ...(d?.cycle === cycle ? d.values : {}), ...values }, keys: s.check || s.keys || null, count: s.count || d?.count || 1 });
+    const values = toKeyed(cycle, s.formValues || s.values || {});
+    const fields = {};
+    for (const f of s.fields || []) fields[f.key] = f;
+    const edit = (s.fields || []).filter((f) => f.edit).map((f) => f.key);
+    const keys = [...new Set([...(CHECK_KEYS[cycle] || []), ...edit])];
+    const op = s.id || (/CYCLE71/.test(cycle) ? 'face' : /POCKET/.test(cycle) ? 'pocket' : 'drill');
+    out.push({ op, cycle, modal: !!s.modal, values, keys, fields, intro: s.intro || '', title: s.title, group: s.group, src: s, count: 1 });
   }
   for (const d of derived) if (!out.some((x) => x.op === d.op)) out.push(d);
   const order = { face: 0, pocket: 1, drill: 2 };
   out.sort((a, b) => (order[a.op] ?? 9) - (order[b.op] ?? 9));
   return out;
-}
-
-// Player program for the tutorial job: tool changes and positioning are prepared; the cycles go on
-// the lines marked >>>.
-export function tutorialTemplate(part, steps) {
-  const MAT = { aluminium: 'ALUMINIUM', steel: 'STEEL', brass: 'BRASS', plastic: 'ACETAL' };
-  const face = r3(part.stock.z - part.size.z);
-  const pocket = steps.find((s) => s.op === 'pocket');
-  const drill = steps.find((s) => s.op === 'drill');
-  const L = [
-    `; JOB_${part.id}  ${part.title.toUpperCase()}  DRG ${part.drawingNo} REV ${part.rev}`,
-    `; BLANK ${part.stock.x} x ${part.stock.y} x ${part.stock.z} ${MAT[part.material] || part.material.toUpperCase()} -> FINISHED ${part.size.x} x ${part.size.y} x ${part.size.z}`,
-    '; SETUP: G54 = TOP FRONT-LEFT CORNER OF THE RAW BLANK, Z0 = TOP OF THE RAW BLANK',
-    `; FINISHED TOP FACE AT Z-${face}; FEATURE FLOOR Z = -${face} - DEPTH`,
-    '; TUTORIAL: THE CYCLES GO BELOW THE LINES MARKED >>>',
-    'N10 G17 G90 G71 G94 G40',
-    'N20 G54',
-    `; ---- OP1 FACE THE TOP ${face} MM, T1 FACE MILL D50`,
-    'N30 T1 D1 M6',
-    'N40 S3200 M3 M8',
-    'N50 G0 X-40 Y0',
-    'N60 Z10',
-    '; >>> OP1 FACE: INSERT CYCLE71 (MILLING > CYCLE71) BELOW THIS LINE',
-  ];
-  let n = 70;
-  if (pocket) {
-    L.push(`; ---- OP2 POCKET ${pocket.featureId || 'A'}, T2 END MILL D10`, `N${n} T2 D1 M6`, `N${n + 10} S9500 M3 M8`, `N${n + 20} G0 X${pocket.values.PA} Y${pocket.values.PO}`, `N${n + 30} Z10`,
-      '; >>> OP2 POCKET: INSERT POCKET3 (MILLING > POCKET3) BELOW THIS LINE');
-    n += 40;
-  }
-  if (drill) {
-    L.push(`; ---- OP3 HOLES ${drill.holes.map((h) => h.id).join(', ')}, T5 TWIST DRILL D6.8`, `N${n} T5 D1 M6`, `N${n + 10} S4500 M3 M8`, `N${n + 20} F600`);
-    n += 30;
-    drill.holes.forEach((h, i) => {
-      L.push(`N${n} G0 X${h.x} Y${h.y}${i === 0 ? '' : ''}`);
-      if (i === 0) { L.push(`N${n + 10} Z10`); n += 10; }
-      L.push(`; >>> OP3 HOLE ${h.id}: INSERT ${drill.cycle} (DRILLING > ${drill.cycle}) BELOW THIS LINE`);
-      n += 10;
-    });
-  }
-  L.push('N900 G0 Z100 M9', 'N910 M5', 'N920 G74 Z1=0', 'N930 M30', '');
-  return L.join('\n');
 }
 
 // ------------------------------------------------------------------ 3D waypoint
@@ -241,7 +200,9 @@ export class Tutorial {
     }
     return bad;
   }
-  validCalls(s) { return this.calls(s.cycle).filter((c) => !this.mismatches(s, c.args).length); }
+  callOk(s, c) { return !this.mismatches(s, c.args).length && (!s.modal || c.modal); }
+  validCalls(s) { return this.calls(s.cycle).filter((c) => this.callOk(s, c)); }
+  badCalls(s) { return this.calls(s.cycle).filter((c) => !this.callOk(s, c)); }
   refLoaded() { return /^JOB_T01_REF\.MPF$/.test(this.app.programName || '') || (this.app.programName === `JOB_${this.part.id}_REF.MPF`); }
   progDone(op) {
     const s = this.step(op);
@@ -251,22 +212,19 @@ export class Tutorial {
   }
   callText(s) {
     const P = CYCLES[s.cycle].params;
-    return formatCall(s.cycle, P.map((p) => String(s.values[p.k] ?? p.def ?? '')));
+    return (s.modal ? 'MCALL ' : '') + formatCall(s.cycle, P.map((p) => String(s.values[p.k] ?? p.def ?? '')));
   }
   // the line the next cycle should be inserted after
   insertLineFor(s) {
     const L = this.editorLines();
-    const res = s.op === 'face' ? [/>>> OP1/] : s.op === 'pocket' ? [/>>> OP2/] : L.map((l, i) => i).filter((i) => />>> OP3/.test(L[i])).map((i) => new RegExp(L[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-    for (const re of res) {
-      const i = L.findIndex((l) => re.test(l));
-      if (i < 0) continue;
-      const nx = findCall(L[i + 1] || '');
-      if (!nx || nx.name !== s.cycle) return i;
-    }
-    return -1;
+    const re = MARK_RE[s.op];
+    const i = re ? L.findIndex((l) => re.test(l)) : -1;
+    if (i < 0) return -1;
+    const nx = findCall(L[i + 1] || '');
+    return !nx || nx.name !== s.cycle ? i : -1;
   }
-  placeCaret(s) {
-    const i = this.insertLineFor(s);
+  placeCaret(s, line = null) {
+    const i = line ?? this.insertLineFor(s);
     if (i < 0) return;
     const ed = this.app.ui.editor;
     if (ed.caretLine() === i) return;
@@ -298,7 +256,7 @@ export class Tutorial {
     }
     this.ensureProgram();
     // fix wrong calls in place, then add the missing ones
-    for (const c of this.calls(s.cycle)) if (this.mismatches(s, c.args).length) ed.replaceLine(c.line, this.callText(s));
+    for (const c of this.badCalls(s)) ed.replaceLine(c.line, this.callText(s));
     let guard = 0;
     while (this.validCalls(s).length < (s.count || 1) && guard++ < 6) {
       const i = this.insertLineFor(s);
@@ -306,6 +264,16 @@ export class Tutorial {
       ed.replaceLine(i, this.callText(s), true);
     }
     this.app.ui.log(`Tutorial: ${s.cycle} filled in with the values from the drawing`);
+  }
+
+  progText(op) {
+    const s = this.step(op);
+    if (!s) return '';
+    const P = CYCLES[s.cycle].params;
+    const keys = (s.keys || CHECK_KEYS[s.cycle] || []).slice().sort((a, b) => P.findIndex((p) => p.k === a) - P.findIndex((p) => p.k === b));
+    const list = keys.map((k) => `<b>${k} ${esc(s.values[k] === '' ? '(empty)' : s.values[k])}</b>`).join(', ');
+    const path = s.modal ? `<b>Drilling › MCALL on</b>, then <b>Re-compile</b> on the new line` : `<b>${/CYCLE8|HOLES/.test(s.cycle) ? 'Drilling' : 'Milling'} › ${s.cycle}</b>`;
+    return `${esc(s.intro || '')} Press ${path} and enter ${list}. Then <b>OK</b>.`;
   }
 
   // ---------------------------------------------------------------- DOM targets
@@ -324,20 +292,29 @@ export class Tutorial {
     const h = this.hmi;
     if (h.pages.program === 'form' && h.form) {
       if (h.form.name !== s.cycle) return { el: this.sk('Cancel'), text: `This is the ${h.form.name} form: press Cancel` };
+      if (s.modal && !h.form.modal) return { el: this.sk('Cancel'), text: 'Use MCALL on instead: press Cancel' };
       const P = CYCLES[s.cycle].params;
       const vals = P.map((_, i) => $(`#cf_${i}`)?.value ?? '');
       const bad = this.mismatches(s, vals);
       if (bad.length) {
         const b = bad[0];
-        return { el: $(`#cf_${b.i}`), text: `${b.k}: enter ${b.want === '' ? '(empty)' : b.want}`, sub: b.label };
+        return { el: $(`#cf_${b.i}`), text: `${b.k}: enter ${b.want === '' ? '(empty)' : b.want}`, sub: s.fields?.[b.k]?.why || b.label };
       }
       return { el: this.sk('OK'), text: 'Values OK: press OK to insert the cycle' };
     }
     return this.hmiTarget('program', () => {
       if (h.pages.program !== 'prog') return { el: this.sk('Edit'), text: 'Press Edit' };
       const grp = /CYCLE8|HOLES/.test(s.cycle) ? 'drill' : 'mill';
+      const bad = this.badCalls(s)[0];
+      if (bad && (!s.modal || bad.modal)) {
+        // a call is there but its values are wrong: edit it with Re-compile
+        this.placeCaret(s, bad.line);
+        return { el: this.sk('Re-compile'), text: 'Re-compile: edit the values', sub: `Line ${bad.line + 1}` };
+      }
+      if (bad) return null; // plain CYCLE81 where MCALL is needed: see the card (Fill for me)
       this.placeCaret(s);
       if (h.sub.program !== grp) return { el: this.sk(grp === 'drill' ? 'Drilling' : 'Milling'), text: `Press ${grp === 'drill' ? 'Drilling' : 'Milling'}` };
+      if (s.modal) return { el: this.sk('MCALL on'), text: 'MCALL on', sub: 'Inserts a modal drilling call; then Re-compile' };
       return { el: this.sk(s.cycle), text: `Press ${s.cycle}` };
     });
   }
@@ -351,17 +328,17 @@ export class Tutorial {
     const svg = v?.svg;
     if (!svg) return null;
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    let rootInv;
+    try { rootInv = svg.getScreenCTM().inverse(); } catch { return null; }
     for (const t of svg.querySelectorAll('text')) {
       const s = t.textContent.trim();
       if (!s || !pred(s, t)) continue;
       let b, m;
-      try { b = t.getBBox(); m = t.getCTM(); } catch { continue; }
+      try { b = t.getBBox(); m = rootInv.multiply(t.getScreenCTM()); } catch { continue; }
       if (!b || !m || (!b.width && !b.height)) continue;
-      for (const [x, y] of [[b.x, b.y], [b.x + b.width, b.y], [b.x, b.y + b.height], [b.x + b.width, b.y + b.height]]) {
-        const X = m.a * x + m.c * y + m.e, Y = m.b * x + m.d * y + m.f;
-        if (X < 14 || X > 406 || Y < 14 || Y > 283) { x0 = Infinity; break; }
-        x0 = Math.min(x0, X); y0 = Math.min(y0, Y); x1 = Math.max(x1, X); y1 = Math.max(y1, Y);
-      }
+      const pts = [[b.x, b.y], [b.x + b.width, b.y], [b.x, b.y + b.height], [b.x + b.width, b.y + b.height]].map(([x, y]) => [m.a * x + m.c * y + m.e, m.b * x + m.d * y + m.f]);
+      if (pts.some(([X, Y]) => X < 14 || X > 406 || Y < 14 || Y > 283)) continue; // sheet frame zone labels
+      for (const [X, Y] of pts) { x0 = Math.min(x0, X); y0 = Math.min(y0, Y); x1 = Math.max(x1, X); y1 = Math.max(y1, Y); }
     }
     if (!isFinite(x0)) return null;
     return { x: x0 - pad, y: y0 - pad, w: x1 - x0 + 2 * pad, h: y1 - y0 + 2 * pad };
@@ -387,6 +364,7 @@ export class Tutorial {
       return h ? h.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(0, 1500, 820);
     };
     const pendantWorld = () => app.machine.pendantBody.localToWorld(new THREE.Vector3(0, 175, 60));
+    this.panelTarget = () => W(pendantWorld(), null, { text: 'Control panel', small: true });
     const modal = (k) => g.ui.topModal()?.kind === k;
     const opOn = () => g.op === 'pendant' || g.op === 'pc';
     const ack = (id) => !!this.st.ack?.[id];
@@ -399,20 +377,22 @@ export class Tutorial {
       id: 'prog-' + op, title, phase: 'Program', fill: op,
       text,
       enter: () => { this.ensureProgram(); },
-      target: () => (opOn() ? this.cycleTarget(this.step(op)) : { el: $('#gOpbar') ? null : null, text: 'Go back to the control panel' }),
+      atPanel: true,
+      target: () => (opOn() ? this.cycleTarget(this.step(op)) : null),
       done: () => this.progDone(op),
       extra: () => {
         const s = this.step(op);
-        const bad = this.calls(s.cycle).map((c) => ({ c, m: this.mismatches(s, c.args) })).filter((x) => x.m.length);
+        const bad = this.badCalls(s).map((c) => ({ c, m: this.mismatches(s, c.args) }));
         if (!bad.length) return '';
         const b = bad[0];
+        if (!b.m.length) return `<div class="t-warn">Line ${b.c.line + 1} is a plain ${s.cycle}: it only drills where the tool stands. It must be <b>MCALL ${s.cycle}</b> (modal) so it drills at every position below. Delete it and use <b>MCALL on</b>, or press <b>Fill for me</b>.</div>`;
         return `<div class="t-warn">The ${s.cycle} in line ${b.c.line + 1} has ${b.m.map((m) => `${m.k} = ${esc(m.got || '(empty)')} (should be ${esc(m.want)})`).join(', ')}. Put the cursor on it and press <b>Re-compile</b> to edit it, or use <b>Fill for me</b>.</div>`;
       },
     });
 
     return [
       { id: 'welcome', phase: 'Start', title: 'Your first part', explain: true,
-        text: () => `This tutorial walks you through a whole job: you pick up drawing <b>${esc(P.drawingNo)}</b>, saw blank to finished part, using the real control. Each step continues by itself once you have done it. Use <b>Skip step</b> if you know it already.` },
+        text: () => `This tutorial takes you through a whole job: you pick drawing <b>${esc(P.drawingNo)}</b> from the job board and turn a sawn blank into a finished, inspected part on the real control. Each step continues by itself once you have done it; use <b>Skip step</b> if you already know it.` },
       { id: 'look', phase: 'Shop floor', title: 'Look around',
         text: () => (touch() ? 'Drag with your <b>right thumb</b> on the right half of the screen to look around.' : '<b>Click the 3D view</b> to capture the mouse, then move the mouse to look around. <b>Esc</b> gives the mouse back.'),
         enter: () => { this.look0 = { yaw: g.fp.yaw, pitch: g.fp.pitch, acc: 0 }; },
@@ -447,7 +427,7 @@ export class Tutorial {
         ['dDatums', 'Datums and ordinate dimensions', 'Datum <b>A</b> is the left face, <b>B</b> the front face, <b>C</b> the top face. Positions are <b>ordinate dimensions</b> measured from the <b>0</b>, the front-left corner: exactly where you will set G54.',
           (s) => s === '0', 22],
         ['dTol', 'A toleranced dimension', `<b>${pocket ? `${pocket.w}±${pocket.tol ?? P.tol.general}` : '±'}</b> means the size may be off by at most that much. Everything else uses the general tolerance in the title block (<b>±${P.tol.general}</b>).`,
-          (s) => /±/.test(s) && !/unless|linear/i.test(s), 8],
+          (s) => /±/.test(s) && /POCKET|×/.test(s) && !/unless|linear/i.test(s), 8],
         ['dHole', 'Hole callout', `<b>${holes.length}× Ø${holes[0]?.d ?? ''}</b> with <b>↧ ${holes[0]?.depth ?? ''}</b>: ${holes.length} holes of that diameter, ${holes[0]?.depth ?? ''} mm deep to the full diameter (the 118° drill point goes a little deeper).`,
           (s) => /\d+×\s*Ø|^Ø\d/.test(s) && !/holes/i.test(s), 10],
         ['dTitle', 'Title block: material and blank', `The title block names the <b>material</b> (${esc(MATERIALS[P.material]?.name)}) and the sawn <b>blank size</b> (${P.stock.x} × ${P.stock.y} × ${P.stock.z}). You need exactly that blank from the stock rack.`,
@@ -495,24 +475,24 @@ export class Tutorial {
         text: () => `Use the <b>control panel</b> (the pendant hanging on the right of the doors). The real 808D-style control opens: screen on the right, machine control panel along the bottom, your drawing on the left.`,
         target: () => W(pendantWorld(), null, { text: 'Control panel', small: true }),
         done: () => g.op === 'pendant' || this.passed('pendant') },
-      { id: 'areas', phase: 'Control', title: 'Operating areas', explain: true,
+      { id: 'areas', atPanel: true, phase: 'Control', title: 'Operating areas', explain: true,
         text: () => 'The five keys on top switch the <b>operating area</b>: MACHINE (positions, JOG, MDA, AUTO), OFFSET (tools, work offsets, blank), PROGRAM (editor and cycles), PROG. MGR (program files) and SYSTEM (alarms, settings).',
         target: () => (opOn() ? { el: $('#areaKeys'), text: 'Operating areas', pad: 4 } : null),
         done: () => ack('areas') || this.passed('areas') },
-      { id: 'softkeys', phase: 'Control', title: 'Softkeys', explain: true,
+      { id: 'softkeys', atPanel: true, phase: 'Control', title: 'Softkeys', explain: true,
         text: () => 'The keys along the bottom and the right of the screen are <b>softkeys</b>: their labels change with the page. Bottom row = pages and groups, right column = actions on the current page.',
         target: () => (opOn() ? { el: $('#hsk'), text: 'Softkeys', pad: 3 } : null),
         done: () => ack('softkeys') || this.passed('softkeys') },
-      { id: 'mcp', phase: 'Control', title: 'Machine control panel', explain: true,
+      { id: 'mcp', atPanel: true, phase: 'Control', title: 'Machine control panel', explain: true,
         text: () => 'Along the bottom: <b>mode keys</b> (JOG, REF POINT, MDA, AUTO), jog keys, spindle keys, the <b>feed override</b> knob and <b>RESET / CYCLE STOP / CYCLE START</b>. The red mushroom is the E-STOP.',
         target: () => (opOn() ? { el: $('#mcp .mcp-group'), text: 'Mode keys', pad: 4 } : null),
         done: () => ack('mcp') || this.passed('mcp') },
-      { id: 'ref', phase: 'Control', title: 'Reference the machine',
+      { id: 'ref', atPanel: true, phase: 'Control', title: 'Reference the machine',
         text: () => 'After power-on the control does not know where the axes are. Reference them: on the MACHINE screen press the softkey <b>Ref. all</b> and watch the axes drive home.',
         skip: () => app.controller.homed,
         target: () => (opOn() ? this.hmiTarget('machine', () => ({ el: this.sk('Ref. all'), text: 'Ref. all' })) : null),
         done: () => app.controller.homed || this.passed('ref') },
-      { id: 'g54', phase: 'Setup', title: 'Set G54 on the blank',
+      { id: 'g54', atPanel: true, phase: 'Setup', title: 'Set G54 on the blank',
         text: () => 'A <b>work offset</b> tells the control where the part zero is. The drawing’s datums are the <b>top front-left corner</b>: go to OFFSET › Work offset, choose <b>Top front-left</b> and press <b>Set from blank</b> (it touches off the corner for you).',
         target: () => {
           if (!opOn()) return null;
@@ -526,28 +506,28 @@ export class Tutorial {
         },
         done: () => (this.viseOk() && g.g54Ok()) || this.passed('g54') },
       // ---- program
-      { id: 'progOpen', phase: 'Program', title: 'Open the program',
+      { id: 'progOpen', atPanel: true, phase: 'Program', title: 'Open the program',
         text: () => `Open the <b>PROGRAM</b> area. JOB_${esc(P.id)}.MPF is prepared: tool changes and moves are there, the cycles go below the lines marked <b>&gt;&gt;&gt;</b>.`,
         enter: () => this.ensureProgram(),
         target: () => (opOn() ? this.hmiTarget('program', () => null) : null),
         done: () => (this.hmi.area === 'program' && opOn()) || this.progDone('face') && this.progDone('pocket') && this.progDone('drill') },
-      progStep('face', 'Face the top: CYCLE71', () => `The blank is ${P.stock.z} mm, the part ${P.size.z} mm: face <b>${face} mm</b> off the top. Press <b>Milling › CYCLE71</b> and enter the values: depth <b>DP ${sv('face', 'DP')}</b>, start corner <b>PA ${sv('face', 'PA')} / PO ${sv('face', 'PO')}</b>, size <b>${sv('face', 'LENG')} × ${sv('face', 'WID')}</b>. Then <b>OK</b>.`),
-      progStep('pocket', 'Mill the pocket: POCKET3', () => `Pocket ${esc(pocket?.id || 'A')}: <b>${sv('pocket', 'LENG')} × ${sv('pocket', 'WID')}</b>, corner radius <b>${sv('pocket', 'CRAD')}</b>, centre <b>X${sv('pocket', 'PA')} Y${sv('pocket', 'PO')}</b>, ${pocket?.depth} deep below the finished top, so floor <b>DP ${sv('pocket', 'DP')}</b> (reference plane RFP ${sv('pocket', 'RFP')}). Press <b>Milling › POCKET3</b>.`),
-      progStep('drill', 'Drill the holes: CYCLE81', () => `Each hole: <b>Drilling › ${esc(this.step('drill')?.cycle || 'CYCLE81')}</b> with final depth <b>DP ${sv('drill', 'DP')}</b> (${face} + ${holes[0]?.depth} + the drill point). The program already moves to each hole; insert the cycle below both <b>&gt;&gt;&gt; OP3</b> lines.`),
+      progStep('face', 'Face the top: CYCLE71', () => this.progText('face')),
+      progStep('pocket', 'Mill the pocket: POCKET3', () => this.progText('pocket')),
+      progStep('drill', 'Drill the holes: MCALL CYCLE81', () => this.progText('drill')),
       // ---- run
-      { id: 'closeDoors', phase: 'Run', title: 'Close the doors',
+      { id: 'closeDoors', atPanel: true, phase: 'Run', title: 'Close the doors',
         text: () => 'Close the doors (the <b>Doors</b> button or a door handle). With the interlock, CYCLE START would close them too.',
         target: () => (opOn() ? { el: $('#gOpDoor'), text: 'Doors' } : null),
         done: () => app.controller.door.target < 0.5 || app.controller.exec?.kind === 'program' || this.passed('closeDoors') },
-      { id: 'auto', phase: 'Run', title: 'Select AUTO',
+      { id: 'auto', atPanel: true, phase: 'Run', title: 'Select AUTO',
         text: () => 'Press the <b>AUTO</b> mode key: the control now runs the selected program.',
         target: () => (opOn() ? { el: $('.key.mode[data-mode="AUTO"]'), text: 'AUTO' } : null),
         done: () => app.controller.mode === 'AUTO' || this.passed('auto') },
-      { id: 'safety', phase: 'Run', title: 'Run it safely', explain: true,
+      { id: 'safety', atPanel: true, phase: 'Run', title: 'Run it safely', explain: true,
         text: () => 'On a real machine you would first run with <b>SBL</b> (single block: one line per CYCLE START) and the <b>feed override</b> turned down, ready on CYCLE STOP. Here a crash only costs a fresh blank, so you can try it.',
         target: () => (opOn() ? { el: $('#knobFeed'), text: 'Feed override', pad: 6 } : null),
         done: () => ack('safety') || app.controller.exec?.kind === 'program' || this.passed('safety') },
-      { id: 'cycleStart', phase: 'Run', title: 'CYCLE START',
+      { id: 'cycleStart', atPanel: true, phase: 'Run', title: 'CYCLE START',
         text: () => 'Press <b>CYCLE START</b>. Push the <b>Simulation speed</b> slider to the right to watch it go faster.',
         target: () => (opOn() ? { el: $('.key.cstart'), text: 'CYCLE START' } : null),
         extra: () => (app.controller.state === 'alarm' ? `<div class="t-warn">Alarm: ${esc(app.controller.alarm || '')}. Press <b>RESET</b>, fix the program (or <b>Fill for me</b> on the program steps) and start again.</div>` : ''),
@@ -620,7 +600,7 @@ export class Tutorial {
     card.setAttribute('aria-label', 'Tutorial');
     card.hidden = true;
     card.innerHTML = `
-      <div class="t-head"><span class="t-ph"></span><span class="t-n"></span><button class="t-ic" data-t="min" title="Minimise (T)">–</button><button class="t-ic" data-t="exit" title="Exit the tutorial">✕</button></div>
+      <div class="t-head"><span class="t-ph"></span><span class="t-n"></span><button class="t-ic" data-t="restart" title="Restart the tutorial">↺</button><button class="t-ic" data-t="min" title="Minimise (T)">–</button><button class="t-ic" data-t="exit" title="Exit the tutorial">✕</button></div>
       <div class="t-bar"><i></i></div>
       <div class="t-body"><b class="t-title"></b><p class="t-text"></p><div class="t-extra"></div><div class="t-done" hidden>✓ Done</div></div>
       <div class="t-acts"><button class="btn ghost" data-t="back">Back</button><button class="btn ghost" data-t="skip">Skip step</button><span class="t-sp"></span><button class="btn" data-t="ref" hidden title="Load the worked solution JOB_${esc(this.part.id)}_REF.MPF">Reference program</button><button class="btn" data-t="fill" hidden>Fill for me</button><button class="btn primary" data-t="next" hidden>Next</button></div>`;
@@ -631,6 +611,7 @@ export class Tutorial {
       const k = b.dataset.t;
       if (k === 'exit') this.exit();
       else if (k === 'min') this.setMin(!this.min);
+      else if (k === 'restart') { if (confirm('Restart the tutorial from the first step?')) this.game.startTutorial({ restart: true }); }
       else if (k === 'back') this.go(this.idx - 1, true);
       else if (k === 'skip') this.go(this.idx + 1, false);
       else if (k === 'next') this.next();
@@ -726,7 +707,7 @@ export class Tutorial {
     while (guard++ < this.steps.length) {
       const s = this.cur;
       const skip = s.skip?.();
-      if (!skip && (s.explain ? !this.safeDone(s) : !this.safeDone(s))) break;
+      if (!skip && !this.safeDone(s) && !this.passed(s.id)) break;
       if (s.last) break;
       if (this.idx >= this.steps.length - 1) break;
       this.cur.leave?.();
@@ -790,6 +771,7 @@ export class Tutorial {
     const s = this.cur, e = this.el, g = this.game;
     let tgt = null;
     try { tgt = s.target ? s.target() : null; } catch (err) { console.warn('tutorial target', s.id, err); }
+    if (s.atPanel && !g.op && !g.ui.topModal()) tgt = this.panelTarget();
     // ---- drawing sheet region
     if (tgt?.sheet !== undefined) {
       const v = this.sheet();
@@ -804,6 +786,7 @@ export class Tutorial {
           r.setAttribute('class', 't-svg-hl');
           r.setAttribute('x', b.x); r.setAttribute('y', b.y); r.setAttribute('width', b.w); r.setAttribute('height', b.h);
           r.setAttribute('rx', 2);
+          r.setAttribute('vector-effect', 'non-scaling-stroke');
           v.svg.appendChild(r);
           this._hl = r;
         } else v.fit();
@@ -817,6 +800,7 @@ export class Tutorial {
       if (r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth && getComputedStyle(el).visibility !== 'hidden') rect = r;
     }
     this.target = rect ? el : null;
+    this.tgt = tgt;
     if (rect) {
       const pad = tgt.pad ?? 5;
       Object.assign(e.spot.style, { left: `${rect.left - pad}px`, top: `${rect.top - pad}px`, width: `${rect.width + 2 * pad}px`, height: `${rect.height + 2 * pad}px` });
@@ -838,9 +822,10 @@ export class Tutorial {
       u.top.position.copy(wp);
       u.top.scale.setScalar(sc);
       u.arrow.position.y = (105 + Math.sin(this.t * 3.2) * 40);
+      // light pillar going up from the arrow: visible from afar, never in front of the target
       u.beacon.visible = !small;
-      u.beacon.scale.set(1, Math.max(10, wp.y), 1);
-      u.beacon.position.y = -wp.y / 2 / sc;
+      u.beacon.scale.set(1, 2600, 1);
+      u.beacon.position.y = 300 + 1300;
       const ring = tgt.ring;
       u.floor.visible = !!ring;
       if (ring) {

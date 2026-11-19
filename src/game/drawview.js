@@ -52,6 +52,18 @@ export class DrawView {
     return { x: this.vb.x + (cx - r.left - ox) / s, y: this.vb.y + (cy - r.top - oy) / s };
   }
 
+  // Frame a sheet region { x, y, w, h } (mm) with a margin (fraction of the region size).
+  zoomTo(box, margin = 0.3) {
+    const aspect = SHEET_H / SHEET_W;
+    let w = box.w * (1 + 2 * margin), h = box.h * (1 + 2 * margin);
+    if (h / w > aspect) w = h / aspect; else h = w * aspect;
+    w = Math.max(SHEET_W / 3.2, Math.min(SHEET_W, w)); // keep some context around small regions
+    h = w * aspect;
+    this.vb = { x: box.x + box.w / 2 - w / 2, y: box.y + box.h / 2 - h / 2, w, h };
+    this.clamp();
+    this.apply();
+  }
+
   zoomAt(f, cx, cy) {
     const r = this.host.getBoundingClientRect();
     if (cx == null) { cx = r.left + r.width / 2; cy = r.top + r.height / 2; }

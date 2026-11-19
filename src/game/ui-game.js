@@ -6,6 +6,7 @@ import { PARTS } from './parts.js';
 import { drawingSVG, drawingThumbSVG } from './drawing.js';
 import { DrawView } from './drawview.js';
 import { BLANKS, blankLabel, fmtClock } from './game.js';
+import { TUTORIAL_PART } from './tutorial-part.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -43,6 +44,7 @@ const ICON = {
   drawing: '<svg viewBox="0 0 24 24"><path d="M5 3.5h10l4 4V20.5H5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8 11h8M8 14.5h8M8 18h5" stroke="currentColor" stroke-width="1.6"/></svg>',
   jobs: '<svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M7 8.5h4v4H7zM13 8.5h4M13 11h4M7 15.5h10" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>',
   help: '<svg><use href="#i-help"/></svg>',
+  cap: '<svg viewBox="0 0 24 24"><path d="M2.5 9.5 12 5l9.5 4.5L12 14z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M6.5 11.5V16c1.5 1.6 3.4 2.4 5.5 2.4s4-.8 5.5-2.4v-4.5M21.5 9.5v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
   blank: '<svg viewBox="0 0 24 24"><path d="m4 8 8-4 8 4v8l-8 4-8-4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m4 8 8 4 8-4M12 12v8" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
   part: '<svg viewBox="0 0 24 24"><path d="m4 8 8-4 8 4v8l-8 4-8-4z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="9.5" r="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>',
   back: '<svg viewBox="0 0 24 24"><path d="M10 6 4 12l6 6M4.5 12H20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -76,6 +78,7 @@ export class GameUI {
       <div class="g-hudbtns">
         <button class="g-hb" data-g="drawing" title="Current drawing (Q)">${ICON.drawing}<span>Drawing</span><kbd>Q</kbd></button>
         <button class="g-hb" data-g="jobs" title="Job list (J)">${ICON.jobs}<span>Jobs</span><kbd>J</kbd></button>
+        <button class="g-hb" data-g="tutorial" id="gTutBtn" title="Interactive tutorial (T)">${ICON.cap}<span>Tutorial</span><kbd>T</kbd></button>
         <button class="g-hb" data-g="help" title="Controls (H)">${ICON.help}<span>Help</span><kbd>H</kbd></button>
       </div>
       <div class="g-carry" id="gCarry" hidden></div>
@@ -90,7 +93,7 @@ export class GameUI {
           <tr><td><kbd>Esc</kbd></td><td>Release the mouse / close / step back</td></tr>
         </table>
         <p class="g-touch-only">On a touch screen: left thumb walks, right thumb looks, tap the prompt to use things.</p>
-        <button class="btn primary" data-g="helpClose">Got it</button>
+        <div class="g-help-acts"><span class="g-help-q" id="gHelpQ">New here? The tutorial guides you through your first part step by step.</span><button class="btn" data-g="helpClose" id="gHelpSkip">Skip</button><button class="btn primary" data-g="tutorial" id="gHelpTut">Start tutorial</button></div>
       </div>
       <div class="g-toasts" id="gToasts"></div>`;
     vp.appendChild(hud);
@@ -102,6 +105,12 @@ export class GameUI {
       if (k === 'drawing') this.toggleDrawing();
       else if (k === 'jobs') this.openJobs();
       else if (k === 'help') this.showHelp(!!$('#gHelp').hidden);
+      else if (k === 'tutorial') {
+        this.showHelp(false);
+        if (b.dataset.restart === '1') game.startTutorial({ restart: true });
+        else if (b.id === 'gHelpTut' || !game.tut?.active) game.startTutorial();
+        else game.tut.setMin(!game.tut.min);
+      }
       else if (k === 'helpClose') this.showHelp(false);
       else if (k === 'obj') { this.objCollapsed = !this.objCollapsed; this._objKey = ''; this.renderObjectives(game.objectives()); }
     });
@@ -219,6 +228,9 @@ export class GameUI {
       e.preventDefault();
       if (top?.kind === 'jobs') this.closeTop();
       else if (!top) this.openJobs();
+    } else if (e.code === 'KeyT' && !top) {
+      e.preventDefault();
+      g.toggleTutorial();
     } else if (e.code === 'KeyH' && !top) {
       this.showHelp(!!$('#gHelp').hidden);
     }
@@ -237,8 +249,23 @@ export class GameUI {
     setTimeout(() => { t.classList.remove('in'); setTimeout(() => t.remove(), 300); }, ms);
   }
 
+  // Tutorial entry points: HUD button label and the welcome / help card buttons.
+  syncTutorial() {
+    const g = this.game, st = g.s.tut;
+    const resumable = st && st.step && !st.finished && !st.active;
+    const btn = $('#gTutBtn span');
+    if (btn) btn.textContent = g.tut?.active ? 'Tutorial' : resumable ? 'Resume tutorial' : 'Tutorial';
+    const hb = $('#gHelpTut');
+    if (hb) {
+      hb.textContent = resumable ? 'Resume tutorial' : st?.finished ? 'Restart tutorial' : 'Start tutorial';
+      $('#gHelpSkip').textContent = g.s.helpSeen ? 'Close' : 'Skip';
+      $('#gHelpQ').textContent = resumable ? 'Pick up the tutorial where you left it.' : g.s.helpSeen ? 'The tutorial guides you through a whole job, step by step.' : 'New here? The tutorial guides you through your first part step by step.';
+    }
+  }
+
   showHelp(on) {
     const h = $('#gHelp');
+    if (on) this.syncTutorial();
     h.hidden = !on || this.game.mode !== 'workshop';
     if (!on && !this.game.s.helpSeen) {
       this.game.s.helpSeen = true;
@@ -392,10 +419,12 @@ export class GameUI {
   openJobs() {
     const g = this.game;
     this.closeAll();
-    const cards = PARTS.map((p) => {
+    const list = [TUTORIAL_PART, ...PARTS];
+    const cards = list.map((p) => {
       const best = g.s.jobs[p.id]?.best;
       const cur = g.s.jobId === p.id;
-      return `<button class="g-job${cur ? ' cur' : ''}" data-job="${p.id}">
+      const tut = p === TUTORIAL_PART;
+      return `<button class="g-job${cur ? ' cur' : ''}${tut ? ' tut' : ''}" data-job="${p.id}">${tut ? '<span class="g-job-tut">Tutorial job</span>' : ''}
         <div class="g-job-thumb">${thumbSVG(p)}</div>
         <div class="g-job-b">
           <div class="g-job-t"><b>${esc(p.id)}</b><span>${esc(p.title)}</span>${cur ? '<em>Current</em>' : ''}${best ? `<i class="g-grade-s g-${best.grade}" title="Best grade">${best.grade}</i>` : ''}</div>
@@ -407,7 +436,7 @@ export class GameUI {
     }).join('');
     const done = PARTS.filter((p) => g.s.jobs[p.id]?.best && g.s.jobs[p.id].best.grade !== 'FAIL').length;
     const m = this.modal({ kind: 'jobs', cls: 'g-wide', title: 'Job board', sub: `${done} of ${PARTS.length} jobs completed · choose a drawing`, body: `<div class="g-jobs">${cards}</div>` });
-    $$('[data-job]', m.el).forEach((b) => b.addEventListener('click', () => this.openDrawing(PARTS.find((p) => p.id === b.dataset.job))));
+    $$('[data-job]', m.el).forEach((b) => b.addEventListener('click', () => this.openDrawing(list.find((p) => p.id === b.dataset.job))));
   }
 
   openDrawing(part) {
@@ -415,7 +444,7 @@ export class GameUI {
     if (!part) return;
     this.closeAll();
     g.markRead(part.id);
-    const cur = g.s.jobId === part.id;
+    const cur = g.s.jobId === part.id && !g.prog?.done;
     const best = g.s.jobs[part.id]?.best;
     const feats = part.features.length;
     const side = `
@@ -441,9 +470,12 @@ export class GameUI {
     const m = this.modal({
       kind: 'drawing', cls: 'g-full', title: `Drawing ${esc(part.drawingNo)}`, sub: 'Scroll or pinch to zoom · drag to pan · double-click to zoom in',
       body: `<div class="g-dw"><div class="g-dw-sheet"><div class="g-dw-view"></div><div class="g-dw-zoom"><button class="btn icon" data-dw="out" title="Zoom out">−</button><button class="btn icon" data-dw="in" title="Zoom in">+</button><button class="btn" data-dw="fit">Fit</button></div></div>${side}</div>`,
+      onClose: () => { if (this.drawView === view) this.drawView = null; },
     });
     const view = new DrawView($('.g-dw-view', m.el));
     view.setSVG(sheetSVG(part));
+    m.partId = part.id;
+    this.drawView = view; // the tutorial zooms and highlights regions of the open sheet
     m.el.addEventListener('click', (e) => {
       const b = e.target.closest('[data-dw]');
       if (!b) return;
