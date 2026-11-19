@@ -116,6 +116,8 @@ export class Tutorial {
     this.min = false;
     this.t = 0;
     this.checkT = 0;
+    this.lookAcc = 0; // radians the player has looked around since the tutorial started
+    this._look = null;
     this.marker = buildMarker();
     this._v = new THREE.Vector3();
     this._w = new THREE.Vector3();
@@ -161,6 +163,14 @@ export class Tutorial {
       ['bench', () => this.onPlate()],
     ];
     return ms.some(([id, fn]) => order.indexOf(id) > i && fn());
+  }
+
+  // the program editor is on screen, on whichever control style is active (808D: PROGRAM area;
+  // NGC-style: EDIT mode / edit display)
+  programView() {
+    const h = this.app.haas;
+    if (h?.active) return h.mode === 'EDIT' || h.disp === 'edit';
+    return this.hmi?.area === 'program';
   }
 
   // ---------------------------------------------------------------- program helpers
@@ -396,14 +406,9 @@ export class Tutorial {
         text: () => `This tutorial takes you through a whole job: you pick drawing <b>${esc(P.drawingNo)}</b> from the job board and turn a sawn blank into a finished, inspected part on the real control. Each step continues by itself once you have done it; use <b>Skip step</b> if you already know it.` },
       { id: 'look', phase: 'Shop floor', title: 'Look around',
         text: () => (touch() ? 'Drag with your <b>right thumb</b> on the right half of the screen to look around.' : '<b>Click the 3D view</b> to capture the mouse, then move the mouse to look around. <b>Esc</b> gives the mouse back.'),
-        enter: () => { this.look0 = { yaw: g.fp.yaw, pitch: g.fp.pitch, acc: 0 }; },
-        tick: () => {
-          const l = this.look0;
-          if (!l) return;
-          l.acc += Math.abs(Math.atan2(Math.sin(g.fp.yaw - l.yaw), Math.cos(g.fp.yaw - l.yaw))) + Math.abs(g.fp.pitch - l.pitch);
-          l.yaw = g.fp.yaw; l.pitch = g.fp.pitch;
-        },
-        done: () => (this.look0?.acc || 0) > 0.9 },
+        // looking around is accumulated every frame since the tutorial started (update()), so looking
+        // while the welcome card was up counts too; walking on / opening the board also passes it
+        done: () => this.lookAcc > 0.9 || near(boardStand, 1500) || modal('jobs') || modal('drawing') || this.jobOn() },
       { id: 'walk', phase: 'Shop floor', title: 'Walk to the job board',
         text: () => (touch() ? 'Use your <b>left thumb</b> as a joystick to walk to the cork board marked with the yellow arrow.' : 'Walk with <b>W A S D</b> (hold <b>Shift</b> to run) to the cork board marked with the yellow arrow.'),
         target: () => W(new THREE.Vector3(board.x + 60, board.y + 700, board.z), boardStand, { text: 'Job board' }),
@@ -513,7 +518,7 @@ export class Tutorial {
         text: () => `Open the <b>PROGRAM</b> area. JOB_${esc(P.id)}.MPF is prepared: tool changes and moves are there, the cycles go below the lines marked <b>&gt;&gt;&gt;</b>.`,
         enter: () => this.ensureProgram(),
         target: () => (opOn() ? this.hmiTarget('program', () => null) : null),
-        done: () => (this.hmi.area === 'program' && opOn()) || this.progDone('face') && this.progDone('pocket') && this.progDone('drill') },
+        done: () => (this.programView() && opOn()) || this.progDone('face') && this.progDone('pocket') && this.progDone('drill') },
       progStep('face', 'Face the top: CYCLE71', () => this.progText('face')),
       progStep('pocket', 'Mill the pocket: POCKET3', () => this.progText('pocket')),
       progStep('drill', 'Drill the holes: MCALL CYCLE81', () => this.progText('drill')),
@@ -644,6 +649,8 @@ export class Tutorial {
     const s = this.game.s;
     s.tut = { ...(s.tut || {}), active: true, ack: s.tut?.ack || {}, offered: true };
     this.active = true;
+    this.lookAcc = 0;
+    this._look = null;
     let i = stepId ? this.steps.findIndex((x) => x.id === stepId) : 0;
     if (i < 0) i = 0;
     this.app.viewer.scene.add(this.marker);
@@ -690,8 +697,14 @@ export class Tutorial {
     this.clearSheet();
     this._sheetKey = '';
     s.enter?.();
+    // Back (hold) shows a step again without bouncing forward at once: remember whether it was
+    // already done, so that it still continues by itself once the player does it again (advance()).
+    this.holdDone = this.hold && this.safeDone(s);
     this.render(true);
-    this.checkT = 0.3; // let the new step settle before checking
+    // a step whose condition already holds when it is entered goes on right away
+    // (initial: start() / restart() decide first whether the welcome card holds)
+    if (!initial) this.advance();
+    this.checkT = 0.1;
   }
 
   next() {
@@ -707,7 +720,15 @@ export class Tutorial {
 
   // advance while the current step is done (skips ahead when the player is ahead of the tutorial)
   advance() {
-    if (this.hold) return;
+    if (this.hold) {
+      // held by Back: an action step that the player now completes (again) continues by itself
+      const s = this.cur;
+      if (s.explain) return;
+      const d = this.safeDone(s);
+      if (!d) { this.holdDone = false; return; }
+      if (this.holdDone) return;
+      this.hold = false;
+    }
     let moved = false, guard = 0;
     while (guard++ < this.steps.length) {
       const s = this.cur;
@@ -727,7 +748,7 @@ export class Tutorial {
       this._sheetKey = '';
       this.app.sound.tone?.(880, 0.005, 0.12, 0.05, 'sine', 220);
       this.render(true);
-      this.checkT = 0.3;
+      this.checkT = 0.1;
     }
   }
 
@@ -763,10 +784,15 @@ export class Tutorial {
     if (!this.active) return;
     this.t += dt;
     const s = this.cur;
+    // looking around (any step; the 'look' step reads it)
+    const fp = this.game.fp, l = this._look;
+    if (l) this.lookAcc += Math.abs(Math.atan2(Math.sin(fp.yaw - l.yaw), Math.cos(fp.yaw - l.yaw))) + Math.abs(fp.pitch - l.pitch);
+    this._look = { yaw: fp.yaw, pitch: fp.pitch };
     s.tick?.(dt);
+    // the step conditions are checked ~10x per second of game time, every frame at low frame rates
     this.checkT -= dt;
     if (this.checkT <= 0) {
-      this.checkT = 0.15;
+      this.checkT = 0.1;
       this.advance();
       this.render();
     }
