@@ -57,7 +57,7 @@ export class DrawView {
     const aspect = SHEET_H / SHEET_W;
     let w = box.w * (1 + 2 * margin), h = box.h * (1 + 2 * margin);
     if (h / w > aspect) w = h / aspect; else h = w * aspect;
-    w = Math.max(SHEET_W / 3.2, Math.min(SHEET_W, w)); // keep some context around small regions
+    w = Math.max(SHEET_W / 2.5, Math.min(SHEET_W, w)); // keep some context around small regions
     h = w * aspect;
     this.vb = { x: box.x + box.w / 2 - w / 2, y: box.y + box.h / 2 - h / 2, w, h };
     this.clamp();

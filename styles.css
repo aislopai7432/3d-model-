@@ -725,12 +725,13 @@ body.ws.op.op-pc #gOpDoor { display: none; }
 .t-sp { flex: 1; }
 .t-card.min .t-body, .t-card.min .t-acts, .t-card.min .t-bar { display: none; }
 .t-card.min { width: 240px; }
-.t-spot { position: fixed; z-index: 79; pointer-events: none; border-radius: 9px; border: 3px solid #ffc440; box-shadow: 0 0 0 4px rgba(255,196,64,.22), 0 0 26px rgba(255,196,64,.55); animation: t-pulse 1.3s ease-in-out infinite; transition: left .12s, top .12s, width .12s, height .12s; }
+.t-spot { position: fixed; z-index: 79; pointer-events: none; border-radius: 9px; border: 3px solid #ffc440; box-shadow: 0 0 0 4px rgba(255,196,64,.22), 0 0 26px rgba(255,196,64,.55); animation: t-pulse 1.3s ease-in-out infinite; }
 @keyframes t-pulse { 50% { box-shadow: 0 0 0 9px rgba(255,196,64,.08), 0 0 34px rgba(255,196,64,.7); } }
 .t-bub { position: fixed; z-index: 81; pointer-events: none; max-width: 300px; padding: 6px 11px; border-radius: 8px; background: #ffc440; color: #1b1406; font: 700 12.5px/1.3 var(--f-ui); box-shadow: 0 6px 18px rgba(0,0,0,.45); }
 .t-bub small { display: block; font-weight: 500; font-size: 11.5px; opacity: .85; }
 .t-bub::after { content: ""; position: absolute; left: var(--ax, 50%); top: -6px; margin-left: -7px; border: 7px solid transparent; border-top: 0; border-bottom-color: #ffc440; }
 .t-bub.up::after { top: auto; bottom: -6px; border-bottom: 0; border-top: 7px solid #ffc440; }
+.t-bub.left::after { left: auto; right: -6px; top: var(--ay, 50%); margin: -7px 0 0; border: 7px solid transparent; border-right: 0; border-left: 7px solid #ffc440; }
 .t-edge { position: fixed; z-index: 78; pointer-events: none; transform: translate(-50%, -50%); display: grid; justify-items: center; gap: 2px; }
 .t-edge i { display: block; width: 0; height: 0; border-top: 13px solid transparent; border-bottom: 13px solid transparent; border-left: 22px solid #ffc440; filter: drop-shadow(0 2px 4px rgba(0,0,0,.6)); }
 .t-edge span { padding: 2px 7px; border-radius: 6px; background: rgba(16,19,23,.85); color: #ffd27a; font: 600 11.5px var(--f-ui); white-space: nowrap; }

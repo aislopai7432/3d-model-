@@ -198,7 +198,7 @@ export class Tutorial {
         bad.push({ i, k, want, got, label: P[i].label });
       }
     }
-    return bad;
+    return bad.sort((a, b) => a.i - b.i);
   }
   callOk(s, c) { return !this.mismatches(s, c.args).length && (!s.modal || c.modal); }
   validCalls(s) { return this.calls(s.cycle).filter((c) => this.callOk(s, c)); }
@@ -382,6 +382,7 @@ export class Tutorial {
       done: () => this.progDone(op),
       extra: () => {
         const s = this.step(op);
+        if (this.hmi.pages.program === 'form' && this.hmi.form?.name === s.cycle) return '';
         const bad = this.badCalls(s).map((c) => ({ c, m: this.mismatches(s, c.args) }));
         if (!bad.length) return '';
         const b = bad[0];
@@ -652,6 +653,8 @@ export class Tutorial {
   restart() {
     this.game.s.tut = { active: true, ack: {}, offered: true };
     this.start(this.steps[0].id);
+    this.hold = true; // show the welcome first; Next then skips ahead to wherever the shop already is
+    this.render(true);
   }
 
   exit(finished = false) {
@@ -713,9 +716,9 @@ export class Tutorial {
       this.cur.leave?.();
       this.idx++;
       moved = true;
-      this.cur.enter?.();
     }
     if (moved) {
+      this.cur.enter?.(); // only the step we land on (skipped steps must not open windows)
       this.game.s.tut.step = this.cur.id;
       this.game.save();
       this.clearSheet();
@@ -746,6 +749,7 @@ export class Tutorial {
     e.fill.hidden = !s.fill;
     e.ref.hidden = !s.fill;
     e.back.disabled = this.idx === 0;
+    e.card.querySelector('[data-t="skip"]').hidden = !!s.last;
   }
 
   clearSheet() {
@@ -797,7 +801,7 @@ export class Tutorial {
     let rect = null;
     if (el && el.isConnected) {
       const r = el.getBoundingClientRect();
-      if (r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth && getComputedStyle(el).visibility !== 'hidden') rect = r;
+      if (r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth && getComputedStyle(el).visibility !== 'hidden' && this.uncovered(el, r)) rect = r;
     }
     this.target = rect ? el : null;
     this.tgt = tgt;
@@ -805,7 +809,7 @@ export class Tutorial {
       const pad = tgt.pad ?? 5;
       Object.assign(e.spot.style, { left: `${rect.left - pad}px`, top: `${rect.top - pad}px`, width: `${rect.width + 2 * pad}px`, height: `${rect.height + 2 * pad}px` });
       e.spot.hidden = false;
-      this.placeBubble(e.bub, rect, tgt.text, tgt.sub);
+      this.placeBubble(e.bub, rect, tgt.text, tgt.sub, el.tagName === 'INPUT' || el.tagName === 'SELECT');
     } else {
       e.spot.hidden = true;
       e.bub.hidden = true;
@@ -840,12 +844,30 @@ export class Tutorial {
     this.placeCard(rect);
   }
 
-  placeBubble(bub, r, text, sub) {
+  // is the element really on top at its centre (not under a window)? tutorial overlays don't count
+  uncovered(el, r) {
+    const x = Math.min(innerWidth - 1, Math.max(0, r.left + r.width / 2)), y = Math.min(innerHeight - 1, Math.max(0, r.top + r.height / 2));
+    const list = document.elementsFromPoint ? document.elementsFromPoint(x, y) : [];
+    const top = list.find((n) => !n.closest?.('.t-card, .t-bub, .t-spot, .t-edge, .t-tag'));
+    return !top || el === top || el.contains(top) || top.contains?.(el);
+  }
+
+  placeBubble(bub, r, text, sub, side = false) {
     if (!text) { bub.hidden = true; return; }
     bub.hidden = false;
     const html = `${esc(text)}${sub ? `<small>${esc(sub)}</small>` : ''}`;
     if (bub._h !== html) { bub.innerHTML = html; bub._h = html; }
     const bw = bub.offsetWidth, bh = bub.offsetHeight;
+    // form fields: put the bubble beside the field so it does not hide the next ones
+    if (side && r.left > bw + 24) {
+      bub.style.left = `${r.left - bw - 14}px`;
+      bub.style.top = `${Math.max(4, Math.min(innerHeight - bh - 4, r.top + r.height / 2 - bh / 2))}px`;
+      bub.classList.remove('up');
+      bub.classList.add('left');
+      bub.style.setProperty('--ay', `${Math.max(10, Math.min(bh - 10, r.top + r.height / 2 - Math.max(4, Math.min(innerHeight - bh - 4, r.top + r.height / 2 - bh / 2))))}px`);
+      return;
+    }
+    bub.classList.remove('left');
     const below = r.bottom + bh + 18 < innerHeight;
     let x = r.left + r.width / 2 - bw / 2;
     x = Math.max(6, Math.min(innerWidth - bw - 6, x));
@@ -877,7 +899,8 @@ export class Tutorial {
     }
     e.tag.hidden = true;
     const ang = Math.atan2(-y, x);
-    const k = Math.min((vr.width / 2 - 34) / Math.max(1e-6, Math.abs(Math.cos(ang))), (vr.height / 2 - 34) / Math.max(1e-6, Math.abs(Math.sin(ang))));
+    // keep the arrow and its label inside the view (label is centred below the arrow)
+    const k = Math.min((vr.width / 2 - 78) / Math.max(1e-6, Math.abs(Math.cos(ang))), (vr.height / 2 - 44) / Math.max(1e-6, Math.abs(Math.sin(ang))));
     e.edge.hidden = false;
     e.edge.style.left = `${cx + Math.cos(ang) * k}px`;
     e.edge.style.top = `${cy + Math.sin(ang) * k}px`;

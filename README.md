@@ -36,6 +36,30 @@ Both modes drive the same machine, control, programs and blank. A part half-made
 
 On a touch screen the left thumb walks (virtual joystick), the right thumb looks around, and tapping the prompt uses the object.
 
+### Tutorial
+
+The interactive tutorial walks you through a whole job, the tutorial part **T01 First part**: an 80 × 50 × 16 aluminium blank faced to 15 mm, with one rectangular pocket and two drilled holes. It teaches by doing. Each step explains one thing in a card and moves on by itself once the game or the control shows that you have done it. Only the pure explanations have a *Next* button.
+
+- **Starting it.** The welcome card on the first visit offers *Start tutorial*. Later, use the **Tutorial** button in the top-right HUD, the help card, or the **T** key. Your progress is saved, so it resumes at the same step after a reload or after *Exit*. The ↺ button restarts it. *Back* and *Skip step* are always available.
+- **What it covers.**
+  - Looking around and walking (mouse or WASD; on touch screens, the thumbs).
+  - Opening the job board and accepting T01.
+  - A guided tour of the drawing sheet. The viewer zooms to each region and highlights it: views and sections, datums and ordinate dimensions, a toleranced dimension, the hole callout with its depth symbol, and the title block with material and blank.
+  - Taking the right blank from the rack, and why the near-miss blanks are wrong.
+  - Opening the doors and clamping the blank.
+  - At the control panel:
+    - the operating areas, softkeys and machine control panel;
+    - referencing the machine;
+    - setting G54 through OFFSET › Work offset › *Set from blank*;
+    - programming CYCLE71, POCKET3 and MCALL CYCLE81 through the real programGUIDE forms, with each field highlighted and checked against the drawing;
+    - running the program safely with AUTO, feed override and CYCLE START.
+  - Unloading the part, the inspection report, and measuring the pocket with the caliper and the length with the micrometer, compared with the drawing tolerances.
+- **Guidance.**
+  - A yellow 3D waypoint (arrow, light pillar and floor ring) marks the next place to walk to. An arrow at the screen edge points to it when it is off-screen.
+  - A pulsing ring and a pointer bubble mark the exact key, softkey or form field to use, and follow the layout as it changes.
+  - *Fill for me* enters the cycle values if you get stuck. *Reference program* loads the worked solution.
+- **Out of order.** If you are ahead of the tutorial (job already accepted, blank already clamped, part already machined), it skips the steps that are already done.
+
 ### The job flow
 
 1. **Job board** (cork board on the left wall). Ten drawings are pinned there, P01 to P10, with difficulty one to five stars in aluminium, acetal, brass and steel. Choose one to open the **drawing viewer**: a full ISO-style A3 sheet you can zoom with the wheel or a pinch and pan by dragging. The side panel shows the customer brief, material, blank and finished sizes, tolerances and the **setup note** (G54 on the top front-left corner of the raw blank, Z0 = top of the blank). *Accept job* creates `JOB_Pxx.MPF` with a header template and selects it. *Load reference program* writes a worked solution to `JOB_Pxx_REF.MPF` (after a confirmation).
@@ -234,6 +258,8 @@ In the 3D view, drag to orbit, right-drag or Shift-drag to pan, and scroll to zo
 | `src/sim/zmap.js`, `tooling.js` | Z-map material removal and cutter profiles |
 | `src/scene/*` | Machine model, tools, stock mesh, vise, toolpath, effects, renderer; `workshop.js` builds the machine shop |
 | `src/game/game.js`, `ui-game.js`, `drawview.js` | Workshop game: modes, first-person interactions, job flow, objectives, persistence, HUD and overlays, drawing pan/zoom |
+| `src/game/tutorial.js`, `tutorial-template.js` | Interactive tutorial: steps, state-driven advancement, spotlight / bubble / 3D waypoint guidance, drawing tour, form value checks; the player's T01 program template |
+| `src/game/tutorial-part.js` | The tutorial job T01: part definition, reference program and the cycle values for each programming step |
 | `src/game/fps.js` | First-person controller (pointer lock, WASD, collisions, touch joystick, interaction prompt) |
 | `src/game/parts.js`, `inspect.js`, `drawing.js` | Job drawings (part definitions and reference programs), inspection against the drawing, ISO drawing sheets |
 | `src/game/measuring.js`, `gauges.js` | Measuring instruments: 3D models, readouts, the measuring station and the measurement maths |
