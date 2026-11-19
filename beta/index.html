@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<script>
+// BETA build: keep all saved data separate from the main game (same website, so storage is shared otherwise)
+(function () {
+  var P = 'beta:';
+  var S = Storage.prototype, get = S.getItem, set = S.setItem, rem = S.removeItem, clr = S.clear;
+  S.getItem = function (k) { return get.call(this, P + k); };
+  S.setItem = function (k, v) { return set.call(this, P + k, v); };
+  S.removeItem = function (k) { return rem.call(this, P + k); };
+  S.clear = function () { for (var i = this.length - 1; i >= 0; i--) { var k = this.key(i); if (k && k.indexOf(P) === 0) rem.call(this, k); } };
+  if (window.indexedDB) {
+    var open = indexedDB.open.bind(indexedDB), del = indexedDB.deleteDatabase.bind(indexedDB);
+    indexedDB.open = function (n, v) { return v === undefined ? open(P + n) : open(P + n, v); };
+    indexedDB.deleteDatabase = function (n) { return del(P + n); };
+  }
+})();
+</script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#121417">
+<title>MillLab BETA: CNC Workshop and VMC Simulator</title>
+<meta name="description" content="A 3-axis CNC milling simulator with an 808D-style control: Siemens-mode G-code with cycles, R parameters and cutter compensation, ISO dialect, Z-map material removal and an industrial operator panel.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="./styles.css">
+<link rel="stylesheet" href="./src/ui/haas/haas.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12.5-7.5z" fill="currentColor"/></symbol>
+  <symbol id="i-stopcycle" viewBox="0 0 24 24"><path d="M12 3 21 12 12 21 3 12z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/></symbol>
+  <symbol id="i-reset" viewBox="0 0 24 24"><path d="M12 5a7 7 0 1 1-6.6 4.7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M4 4v6h6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9.5h4L13 5v14l-5-4.5H4z" fill="currentColor"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-mute" viewBox="0 0 24 24"><path d="M4 9.5h4L13 5v14l-5-4.5H4z" fill="currentColor"/><path d="m16.5 9.5 5 5m0-5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></symbol>
+  <symbol id="i-wand" viewBox="0 0 24 24"><path d="m5 19 10-10m-1.5-4.5v2.5m4.5 2h2.5M17 4.5l-1.5 1.5M19.5 7 18 8.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M9.6 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1.1.9-1.1 1.7v.4M12 16.6v.2" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></symbol>
+  <symbol id="i-cw" viewBox="0 0 24 24"><path d="M18.5 12a6.5 6.5 0 1 1-2-4.7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M18 3.5V8h-4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-ccw" viewBox="0 0 24 24"><path d="M5.5 12a6.5 6.5 0 1 0 2-4.7" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M6 3.5V8h4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-spstop" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="2.2"/><rect x="9" y="9" width="6" height="6" fill="currentColor"/></symbol>
+</svg>
+
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="3" width="26" height="26" rx="6" fill="#1d2a3a" stroke="#3d8bfd" stroke-width="1.5"/><path d="M11 8v11l5 5 5-5V8" fill="none" stroke="#e6edf5" stroke-width="2.2" stroke-linejoin="round"/><path d="M16 13v11" stroke="#3d8bfd" stroke-width="2.2"/></svg>
+      <div class="brand-text"><b>MillLab</b><span>VMC-560 · 808D-style control</span></div>
+    </div>
+    <div class="seg mode-seg" id="modeSeg" role="tablist" aria-label="Mode">
+      <button data-gmode="workshop" role="tab" title="First-person workshop game"><svg viewBox="0 0 24 24"><path d="M3 20V9l9-5 9 5v11" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M8 20v-6h8v6" fill="none" stroke="currentColor" stroke-width="1.9"/></svg><span>Workshop</span></button><button data-gmode="sim" role="tab" title="Simulator: orbit view and the full control"><svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="12" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M9 20h6M12 16.5V20" stroke="currentColor" stroke-width="1.9"/></svg><span>Simulator</span></button>
+    </div>
+    <button class="job-chip" id="jobChip" title="Current job: open the drawing" hidden></button>
+    <div class="prog-chip" title="Program selected for AUTO"><span class="lbl">PROGRAM</span><span id="progName">—</span></div>
+    <div class="state-pill" id="statePill" data-state="idle"><i></i><span id="stateText">RESET</span></div>
+    <div class="top-actions">
+      <button class="btn ghost" data-action="wizard" title="Machine setup wizard"><svg><use href="#i-wand"/></svg><span>Setup wizard</span></button>
+      <button class="btn ghost icon" data-action="sound" id="btnSound" title="Sound on / off"><svg><use href="#i-sound"/></svg></button>
+      <button class="btn ghost icon" data-action="help" title="Help and keyboard shortcuts"><svg><use href="#i-help"/></svg></button>
+    </div>
+  </header>
+
+  <nav class="mobile-tabs" id="mobileTabs" aria-label="View">
+    <button data-mview="both" class="active">3D + Control</button><button data-mview="view">3D view</button><button data-mview="cu">Control</button>
+  </nav>
+
+  <main class="workspace" id="workspace">
+    <section class="viewport" id="viewport">
+      <canvas id="view" tabindex="0" aria-label="3D view of the CNC machine"></canvas>
+      <div class="vp-top">
+        <div class="vp-bar tl">
+          <div class="seg small" id="viewSeg">
+            <button data-view="iso" class="on">Iso</button><button data-view="front">Front</button><button data-view="side">Side</button><button data-view="top">Top</button><button data-view="work">Work</button><button data-view="machine">Machine</button>
+          </div>
+        </div>
+        <div class="vp-bar tr">
+          <div class="seg small toggles">
+            <button data-toggle="enclosure" class="on" title="Show / hide the enclosure">Enclosure</button>
+            <button data-action="door" id="btnDoor" title="Open / close the sliding doors">Doors</button>
+            <button data-toggle="lights" class="on" title="Internal LED lighting">Lights</button>
+            <button data-toggle="covers" class="on" title="Telescopic way covers">Covers</button>
+            <button data-toggle="toolpath" class="on" title="Toolpath preview">Path</button>
+            <button data-toggle="measure" title="Measure the workpiece: click two points">Measure</button>
+          </div>
+        </div>
+      </div>
+      <div class="alarm-banner" id="alarmBanner" hidden>
+        <b id="alarmTitle">ALARM</b><span id="alarmText"></span><button class="btn" data-action="reset">Reset</button>
+      </div>
+      <div class="hold-banner" id="holdBanner" hidden></div>
+      <div class="vp-hud" id="vpHud">
+        <div><i class="x">X</i><span id="hX">0.000</span></div>
+        <div><i class="y">Y</i><span id="hY">0.000</span></div>
+        <div><i class="z">Z</i><span id="hZ">0.000</span></div>
+        <div class="hud-sep"></div>
+        <div><i>S</i><span id="hS">0</span></div>
+        <div><i>F</i><span id="hF">0</span></div>
+        <div><i>T</i><span id="hT">0</span></div>
+        <div class="hud-line" id="hudLine">—</div>
+      </div>
+      <div class="measure-box" id="measureBox" hidden></div>
+      <div class="measure-label" id="measureLabel" hidden></div>
+      <div class="probe-label" id="probeLabel" hidden></div>
+      <div class="simbox" title="Simulation speed (not part of the real control)">
+        <div class="mcp-cap">Simulation speed <output id="simSpeedVal">1×</output></div>
+        <input type="range" id="simSpeed" min="0" max="9" step="1" value="2" aria-label="Simulation speed">
+        <div class="pbar"><i id="pgBar"></i></div>
+        <div class="prog-bot"><span id="pgElapsed">0:00</span><span id="pgPct">0%</span><span id="pgRemain">--:--</span></div>
+      </div>
+      <div class="fps" id="fps"></div>
+      <div class="loading" id="loading"><div class="spinner"></div><span id="loadingText">Building machine…</span></div>
+    </section>
+
+    <div class="splitter" data-split="right" title="Drag to resize"></div>
+
+    <section class="cu" id="cu" aria-label="808D-style control unit">
+      <div class="cu-areas" id="areaKeys" role="tablist">
+        <button data-area="machine" class="on"><b>MACHINE</b><span>Position</span></button>
+        <button data-area="offset"><b>OFFSET</b><span>Parameter</span></button>
+        <button data-area="program"><b>PROGRAM</b><span>Edit · Cycles</span></button>
+        <button data-area="pm"><b>PROG. MGR</b><span>Programs</span></button>
+        <button data-area="system"><b>SYSTEM</b><span>Alarm · Settings</span><i class="badge" id="alarmBadge" hidden></i></button>
+      </div>
+      <div class="hmi" id="hmi">
+        <div class="hmi-head">
+          <div class="hd-area"><b id="hmiArea">Machine</b><span id="hmiMode" class="mode-tag">JOG</span></div>
+          <div class="hd-state"><span id="chanState">Channel reset</span><span id="progState">Program aborted</span></div>
+          <div class="hd-prog" id="hmiProg">—</div>
+        </div>
+        <div class="hmi-msg">
+          <span class="al" id="alarmLine"></span>
+          <span class="ms" id="msgLine"></span>
+        </div>
+        <div class="hmi-body">
+          <div class="hmi-main" id="hmiMain"></div>
+          <div class="vsk" id="vsk"></div>
+        </div>
+        <div class="hsk" id="hsk"></div>
+      </div>
+    </section>
+
+    <section class="haas" id="haas" aria-label="NGC-style control pendant"></section>
+  </main>
+
+  <footer class="mcp" id="mcp" aria-label="Machine control panel">
+    <div class="mcp-group">
+      <div class="mcp-cap">Mode</div>
+      <div class="keys">
+        <button class="key mode" data-mode="JOG" title="JOG: manual traversing"><i class="led"></i>JOG</button>
+        <button class="key mode" data-mode="REF" title="Reference point approach"><i class="led"></i>REF<br>POINT</button>
+        <button class="key mode" data-mode="MDA" title="MDA: manual data input"><i class="led"></i>MDA</button>
+        <button class="key mode" data-mode="AUTO" title="AUTO: run the selected program"><i class="led"></i>AUTO</button>
+      </div>
+    </div>
+    <div class="mcp-group">
+      <div class="mcp-cap">Increment (µm)</div>
+      <div class="keys">
+        <button class="key inc" data-inc="0.001" title="1 µm"><i class="led"></i>1</button>
+        <button class="key inc" data-inc="0.01" title="10 µm"><i class="led"></i>10</button>
+        <button class="key inc" data-inc="0.1" title="100 µm"><i class="led"></i>100</button>
+        <button class="key inc" data-inc="1" title="1000 µm"><i class="led"></i>1000</button>
+      </div>
+    </div>
+    <div class="mcp-group">
+      <div class="mcp-cap">Program control</div>
+      <div class="keys">
+        <button class="key" data-pc="sbl" title="Single block"><i class="led"></i>SBL</button>
+        <button class="key" data-pc="m01" title="Conditional stop M01"><i class="led"></i>M01</button>
+        <button class="key" data-pc="skp" title="Skip blocks marked with /"><i class="led"></i>SKP</button>
+        <button class="key" data-pc="dry" title="Dry run feed"><i class="led"></i>DRY</button>
+      </div>
+    </div>
+    <div class="mcp-group axes">
+      <div class="mcp-cap">Axes</div>
+      <div class="axpad">
+        <button class="key ax" data-jog="z+">+Z</button>
+        <button class="key ax" data-jog="y+">+Y</button>
+        <button class="key ax" data-jog="x-">−X</button>
+        <button class="key ax rapid" data-rapid="1" title="Hold with an axis key for rapid traverse">RAPID</button>
+        <button class="key ax" data-jog="x+">+X</button>
+        <button class="key ax" data-jog="y-">−Y</button>
+        <button class="key ax" data-jog="z-">−Z</button>
+      </div>
+    </div>
+    <div class="mcp-group">
+      <div class="mcp-cap">Spindle</div>
+      <div class="keys">
+        <button class="key sp" data-sp="-1" title="Spindle counter-clockwise (JOG)"><svg><use href="#i-ccw"/></svg></button>
+        <button class="key sp" data-sp="0" title="Spindle stop"><svg><use href="#i-spstop"/></svg></button>
+        <button class="key sp" data-sp="1" title="Spindle clockwise (JOG)"><svg><use href="#i-cw"/></svg></button>
+      </div>
+    </div>
+    <div class="mcp-group knobs">
+      <div class="knob" id="knobFeed" title="Feed override (also rapid with ROV). Drag, scroll or use the arrows."><div class="dial"><i></i></div><div class="kv"><b>100%</b><span>FEED</span></div></div>
+      <div class="knob" id="knobSpindle" title="Spindle override. Drag, scroll or use the arrows."><div class="dial"><i></i></div><div class="kv"><b>100%</b><span>SPINDLE</span></div></div>
+    </div>
+    <div class="mcp-group cycle">
+      <div class="mcp-cap">Cycle</div>
+      <div class="keys">
+        <button class="key reset" data-action="reset" title="RESET (Esc)"><svg><use href="#i-reset"/></svg>RESET</button>
+        <button class="key cstop" data-action="feedHold" title="Cycle stop / feed hold"><svg><use href="#i-stopcycle"/></svg>STOP</button>
+        <button class="key cstart" data-action="cycleStart" title="Cycle start (Space)"><svg><use href="#i-play"/></svg>START</button>
+      </div>
+    </div>
+    <button class="estop" data-action="estop" title="Emergency stop"><span>E-STOP</span></button>
+  </footer>
+</div>
+
+<div class="modal-wrap" id="wizard" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="wzTitle">
+    <div class="modal-h"><b id="wzTitle">Machine setup</b><span id="wzStepLbl">Step 1 of 4</span><button class="btn ghost icon" data-action="wizardClose" aria-label="Close">✕</button></div>
+    <ol class="wz-steps" id="wzSteps"><li class="on">Material</li><li>Blank</li><li>Work offset</li><li>Tools</li></ol>
+    <div class="modal-b" id="wzBody"></div>
+    <div class="modal-f"><button class="btn" data-action="wizardBack" id="wzBack">Back</button><button class="btn primary" data-action="wizardNext" id="wzNext">Next</button></div>
+  </div>
+</div>
+
+<div class="modal-wrap" id="helpModal" hidden>
+  <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+    <div class="modal-h"><b id="helpTitle">Using the 808D-style control</b><button class="btn ghost icon" data-action="helpClose" aria-label="Close">✕</button></div>
+    <div class="modal-b help">
+      <ol>
+        <li><b>Reference the machine.</b> Select <b>REF POINT</b> and press <b>+Z</b>, <b>+X</b>, <b>+Y</b> (or the <i>Ref. all</i> softkey). AUTO also references automatically if needed.</li>
+        <li><b>Pick a program.</b> <b>PROG. MGR</b> lists your programs and the examples. <i>Execute</i> selects one for AUTO and loads its blank; <i>Open</i> edits it in <b>PROGRAM</b>.</li>
+        <li><b>Write with cycles.</b> In <b>PROGRAM</b>, the Drilling, Milling and Contour softkeys open input screens with help pictures. <i>OK</i> inserts the cycle call; put the cursor on a call and press <i>Recompile</i> to edit it again.</li>
+        <li><b>Set up.</b> <b>OFFSET</b> holds the tool list, wear, work offsets, R variables, setting data and the blank. In JOG, <i>Set WO</i> touches off the active work offset at the tool.</li>
+        <li><b>Run.</b> Select <b>AUTO</b> and press <b>CYCLE START</b>. Use <b>SBL</b> for single block, <b>CYCLE STOP</b> to hold, <b>RESET</b> to abort, the feed knob to override and the Simulation slider to go faster. In <b>MDA</b>, type blocks on the Machine screen and press CYCLE START.</li>
+      </ol>
+      <table class="keys-t">
+        <tr><td><kbd>Space</kbd></td><td>Cycle start / cycle stop</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>RESET (or leave measure mode)</td></tr>
+        <tr><td><kbd>S</kbd></td><td>Single block step</td></tr>
+        <tr><td><kbd>← → ↑ ↓</kbd> <kbd>PgUp</kbd> <kbd>PgDn</kbd></td><td>Jog X / Y / Z in JOG (selected increment or continuous); hold <kbd>Shift</kbd> for rapid</td></tr>
+        <tr><td><kbd>F1</kbd>–<kbd>F5</kbd></td><td>Machine, Offset, Program, Program manager, System areas</td></tr>
+        <tr><td><kbd>1</kbd>–<kbd>6</kbd></td><td>Iso, front, side, top, work and machine views</td></tr>
+      </table>
+      <p class="muted">The control follows SINUMERIK 808D conventions in Siemens mode (D-number tool offsets, CR=, AC/IC, R parameters, the standard cycles) and accepts ISO dialect programs that start with G291. Machine home is X0 Y0 Z0 with negative travel; work offsets hold the machine position of the part zero. MillLab is an independent training simulator and is not affiliated with or endorsed by Siemens; SINUMERIK is a trademark of Siemens AG.</p>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="fileInput" accept=".mpf,.spf,.nc,.tap,.gcode,.ngc,.cnc,.txt" hidden>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module" src="./src/main.js"></script>
+<a href="../" title="Back to the normal (stable) version" style="position:fixed;left:50%;top:6px;transform:translateX(-50%);z-index:99999;background:#e8b21a;color:#16171a;font:700 12px/1 Arial,sans-serif;padding:6px 12px;border-radius:12px;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,.4)">BETA · work in progress · back to stable ↩</a>
+</body>
+</html>
