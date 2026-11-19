@@ -261,7 +261,7 @@ function mainOffset(h) {
   if (tab === 0) {
     const cur = h.cursor('tool', { col: 1 });
     const rowsN = h.toolRows();
-    const rows = rowsFor(h, 'main', h.rowH * 7.4);
+    const rows = rowsFor(h, 'main', h.rowH * 8);
     const top = win(h, 'tool', cur.row, rowsN.length, rows);
     const ncols = Math.max(2, Math.min(TOOL_COLS.length - 1, Math.floor(((h.parts.main.el.clientWidth || 500) - 70) / 92)));
     let c0 = h.view.toolCol || 1;
