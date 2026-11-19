@@ -26,6 +26,7 @@ export class Viewer {
     r.setClearColor(0x000000, 0);
     r.autoClear = false;
     this.renderer = r;
+    this.overlays = []; // [{scene, camera?, visible?, beforeRender?}] rendered after the world with depth cleared
 
     this.scene = new THREE.Scene();
     this.scene.fog = new THREE.Fog(0x15181c, 7000, 15000);
@@ -162,6 +163,13 @@ export class Viewer {
     r.setScissorTest(false);
     r.clear();
     r.render(this.scene, this.camera);
+    // overlay scenes (e.g. the coffee mug): drawn over the world with a cleared depth buffer
+    for (const o of this.overlays) {
+      if (o.visible === false) continue;
+      o.beforeRender?.(this.camera);
+      r.clearDepth();
+      r.render(o.scene, o.camera || this.camera);
+    }
     if (!this.showGizmo) return;
     // axis gizmo in the bottom-left corner
     const s = 96;
