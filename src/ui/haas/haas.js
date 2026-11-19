@@ -892,11 +892,23 @@ export class HaasControl {
     if (this.disp === d && DISPLAY_TABS[d]) {
       this.tab[d] = (this.tab[d] + 1) % DISPLAY_TABS[d].length;
       this.onTab(d);
-    } else this.disp = d;
+    } else {
+      this.disp = d;
+      this.onTab(d);
+    }
   }
 
   onTab(d) {
     if (d === 'list') this.lpClamp();
+    // the tool offsets open on the tool in the spindle, the work offsets on the active work offset
+    if (d === 'offset' && this.tab.offset === 0) {
+      const i = this.toolRows().indexOf(this.c.tool);
+      if (i >= 0) this.cursor('tool', { col: 1 }).row = i;
+    }
+    if (d === 'offset' && this.tab.offset === 1) {
+      const w = this.c.modal.wcs >= 54 && this.c.modal.wcs <= 59 ? this.c.modal.wcs : 54;
+      this.cursor('work', { row: 1, col: 1 }).row = w - 53;
+    }
   }
 
   k_PROGRAM() {
@@ -1791,7 +1803,7 @@ export class HaasControl {
           if (cur.col === 7) return this.toolTypePopup();
           return this.offsetEntry(true);
         }
-        if (n === 4) { this.tab.offset = 1; return; }
+        if (n === 4) { this.tab.offset = 1; this.onTab('offset'); return; }
         return this.say(`F${n}: no function on the Tool tab`, 'warn');
       }
       if (n === 1) {
@@ -1799,7 +1811,7 @@ export class HaasControl {
         return this.workOptions();
       }
       if (n === 3) return this.probingActions();
-      if (n === 4) { this.tab.offset = 0; return; }
+      if (n === 4) { this.tab.offset = 0; this.onTab('offset'); return; }
       return this.say(`F${n}: no function on the Work tab`, 'warn');
     }
     if (d === 'list') {
