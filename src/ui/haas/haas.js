@@ -281,10 +281,10 @@ export class HaasControl {
     let k;
     if (phone) k = Math.max(30, Math.min(42, (W - 20) / 10.6));
     else {
-      const leftW = Math.max(74, Math.min(120, W * 0.12));
+      const leftW = Math.max(70, Math.min(110, W * 0.11));
       root.style.setProperty('--lw', leftW + 'px');
       const sideW = 44;
-      k = Math.min((W - leftW - sideW - 60) / 14.75, (H * 0.52 - 30) / 9.8);
+      k = Math.min((W - leftW - sideW - 50) / 14.75, (H * 0.52 - 30) / 9.8);
       k = Math.max(22, Math.min(60, k));
     }
     root.style.setProperty('--k', k.toFixed(2) + 'px');
