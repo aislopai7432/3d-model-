@@ -341,9 +341,9 @@ export function makeSurfaceFn(app) {
     if (Math.abs(x) <= VISE.jawWidth / 2 && pl) {
       const W = pl.width / 2;
       if ((y >= W && y <= W + VISE.jawThickness) || (y <= -W && y >= -W - VISE.jawThickness)) return pl.jawTop;
-      if (y > -240 && y < 195) return VISE.floor - 10;
+      if (y > -150 && y < 150) return VISE.floor - 10;
     }
-    if (Math.abs(x) <= 400 && Math.abs(y) <= 190) return 0;
+    if (Math.abs(x) <= 457 && Math.abs(y) <= 152) return 0;
     return null;
   };
 }

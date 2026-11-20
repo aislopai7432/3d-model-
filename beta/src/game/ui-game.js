@@ -190,7 +190,7 @@ export class GameUI {
     this.hud.classList.toggle('g-walk', walking);
     this.hud.classList.toggle('g-op', !!g.op);
     this.hud.classList.toggle('g-meas', !!g.measuring);
-    $('#gOpLbl').textContent = g.op === 'pc' ? 'CAM computer · offline programming' : 'Control panel · VMC-560';
+    $('#gOpLbl').textContent = g.op === 'pc' ? 'CAM computer · offline programming' : 'Control panel · Mini Mill';
     const j = g.job;
     const chip = $('#jobChip');
     chip.hidden = g.mode !== 'workshop';
