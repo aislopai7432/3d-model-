@@ -137,7 +137,8 @@ class App {
     this.ui.loading(null);
     this.last = performance.now();
     this.uiTimer = 0;
-    this.screenTimer = 0;
+    this.screenTimer = 1; // draw the pendant screen on the very first frame
+    try { this.drawPendantScreen(); } catch (e) { /* fonts/ui not ready: the first frame redraws */ }
     this.fpsAcc = { n: 0, t: 0 };
     const loop = (now) => {
       if (!window.__pauseRender) this.frame(now);

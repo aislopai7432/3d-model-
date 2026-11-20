@@ -17,7 +17,7 @@ const GAUGE0 = TT + MACHINE.gaugeAtZ0; // world Y of the gauge line at Z0 (1413)
 const XL = -900, XR = 760, ZF = 640, ZB = -720, YR = 1900;
 const CH_Y = 720, CH_B = 440, CH_XL = -500, CH_XR = 520; // chamfer start height / bottom height / bottom x
 const WX0 = -300, WX1 = 330, WY0 = 900, WY1 = 1700; // front window opening
-const COLZ = -400, COL_TOP = 2560; // column face z, column top
+const COLZ = -400, COL_TOP = 2880; // column face z, column top
 const BEACON_X = 640;
 const PEND_X = 575, PEND_Y = 1330, PEND_Z = ZF + 100;
 const PITCH = 10; // ball screw lead, mm/rev
@@ -401,12 +401,12 @@ export class MachineModel {
     // dark charcoal back plate and neck
     this.bx(-215, 130, zb + 30, 215, 700, zb + 100, M.charcoal, H, 10);
     // light grey head housing
-    this.bx(-190, 125, zb + 100, 190, 440, 44, M.paintLight, H, 16);
+    this.bx(-190, 125, zb + 100, 190, 372, 44, M.paintLight, H, 16);
     // charcoal upper casting that rises through the roof slot when Z is high
-    this.bx(-200, 440, zb + 30, 200, 800, -70, M.charcoal, H, 14);
+    this.bx(-200, 360, zb + 30, 200, 800, -70, M.charcoal, H, 14);
     // warning sticker (pictograms only) and TOOL RELEASE button on the housing front
     const stk = new THREE.Mesh(new THREE.PlaneGeometry(220, 112), new THREE.MeshStandardMaterial({ map: warningStickerTexture(), roughness: 0.6 }));
-    stk.position.set(-20, 360, 44.6);
+    stk.position.set(-20, 292, 44.6);
     H.add(stk);
     this.cyl(17, 10, M.chrome, 125, 195, 46, H, 'z', 20);
     const rel = this.cyl(12, 12, M.black, 125, 195, 50, H, 'z', 20);
@@ -554,7 +554,22 @@ export class MachineModel {
     this.bx(WX1 - 6, WY0 - 12, ZF - T - 2, WX1 + 8, WY1 + 12, ZF + 6, M.charcoal, S);
     // side walls, chamfer panels and roof (roof has a slot for the column / head)
     for (const [x, sgn] of [[XL, -1], [XR, 1]]) {
-      this.bx(sgn < 0 ? x : x - T, CH_Y, ZB, sgn < 0 ? x + T : x, YR, ZF, M.paint, S);
+      // side wall with an observation window (z -240..380, y 1040..1640)
+      const sx0 = sgn < 0 ? x : x - T, sx1 = sgn < 0 ? x + T : x;
+      const SZ0 = -240, SZ1 = 380, SY0 = 1040, SY1 = 1640;
+      this.bx(sx0, CH_Y, ZB, sx1, SY0, ZF, M.paint, S);
+      this.bx(sx0, SY1, ZB, sx1, YR, ZF, M.paint, S);
+      this.bx(sx0, SY0, ZB, sx1, SY1, SZ0, M.paint, S);
+      this.bx(sx0, SY0, SZ1, sx1, SY1, ZF, M.paint, S);
+      const wg = new THREE.Mesh(new THREE.BoxGeometry(6, SY1 - SY0, SZ1 - SZ0), M.glass);
+      wg.position.set((sx0 + sx1) / 2, (SY0 + SY1) / 2, (SZ0 + SZ1) / 2);
+      wg.userData.shadow = false;
+      S.add(wg);
+      const fx0 = sx0 - 4 * sgn, fx1 = sx1 + 4 * sgn, a = Math.min(fx0, fx1), b = Math.max(fx0, fx1);
+      this.bx(a, SY0 - 10, SZ0 - 10, b, SY0 + 8, SZ1 + 10, M.charcoal, S);
+      this.bx(a, SY1 - 8, SZ0 - 10, b, SY1 + 10, SZ1 + 10, M.charcoal, S);
+      this.bx(a, SY0 - 10, SZ0 - 10, b, SY1 + 10, SZ0 + 8, M.charcoal, S);
+      this.bx(a, SY0 - 10, SZ1 - 8, b, SY1 + 10, SZ1 + 10, M.charcoal, S);
       const x1 = sgn < 0 ? CH_XL : CH_XR;
       const dx = x1 - x, dy = CH_B - CH_Y, len = Math.hypot(dx, dy);
       const m = new THREE.Mesh(new THREE.BoxGeometry(len, T, ZF - ZB), M.paint);

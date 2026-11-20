@@ -4,12 +4,12 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 const VIEWS = {
-  iso: { pos: [-950, 1900, 2250], target: [-60, 1060, -40] },
-  front: { pos: [0, 1260, 2500], target: [0, 1090, 0] },
-  side: { pos: [2600, 1300, 120], target: [0, 1080, 0] },
-  top: { pos: [0, 3300, 40], target: [0, 1000, 0] },
-  work: { pos: [380, 1330, 620], target: [0, 1000, 0] },
-  machine: { pos: [3300, 2600, 4200], target: [0, 1250, -150] },
+  iso: { pos: [-1350, 2250, 4000], target: [80, 1500, -60] },
+  front: { pos: [100, 1650, 4600], target: [100, 1650, 0] },
+  side: { pos: [6000, 1800, -40], target: [0, 1750, -40] },
+  top: { pos: [0, 4300, 60], target: [0, 1000, 0] },
+  work: { pos: [-150, 1500, 1400], target: [0, 1040, 0] },
+  machine: { pos: [3700, 2800, 5500], target: [-60, 1650, -100] },
 };
 
 export class Viewer {
