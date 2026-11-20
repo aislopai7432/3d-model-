@@ -1,7 +1,7 @@
 // MillLab: application bootstrap. Wires the interpreter, controller, Z-map, 3D scene, effects, sound
 // and UI together and runs the frame loop.
 import * as THREE from 'three';
-import { MACHINE, MATERIALS, DEFAULT_TOOLS, DEFAULT_STOCK, DEFAULT_SETTINGS, ACCURACY } from './config.js';
+import { PROFILE, MACHINE, MATERIALS, DEFAULT_TOOLS, DEFAULT_STOCK, DEFAULT_SETTINGS, ACCURACY } from './config.js';
 import { compileProgram, detectDialect } from './gcode/compile.js';
 import { siemensDefault } from './gcode/siemens.js';
 import { getExample808 } from './gcode/examples808.js';
@@ -11,7 +11,8 @@ import { makeCutter, surfaceSpeed } from './sim/tooling.js';
 import { Controller, fmtTime } from './sim/controller.js';
 import { createTextures } from './scene/textures.js';
 import { Viewer } from './scene/viewer.js';
-import { MachineModel } from './scene/machine.js';
+import { MachineModel as MiniMillModel } from './scene/machine.js';
+import { Vmc560Model } from './scene/machine-vmc560.js';
 import { buildToolModel } from './scene/toolmodels.js';
 import { StockMesh } from './scene/stockmesh.js';
 import { buildVise, buildWcsMarker, stockPlacement } from './scene/workholding.js';
@@ -76,7 +77,7 @@ class App {
     this.viewer = new Viewer($('#view'), $('#viewport'));
     this.ui.loading('Building machine…');
     await nextFrame();
-    this.machine = new MachineModel(T);
+    this.machine = new (PROFILE.id === 'vmc560' ? Vmc560Model : MiniMillModel)(T);
     this.viewer.scene.add(this.machine.root);
     this.machine.setTools(this.tools, buildToolModel);
     this.toolpath = new Toolpath();
