@@ -49,43 +49,43 @@ export function buildVise(place) {
     tbox(g, x0, y0, z0, x1, y1, z1, mat, round);
     if (name) boxes.push({ name, min: [x0, y0, z0], max: [x1, y1, z1] });
   };
-  // base and body
-  add('vise base', -95, -255, 0, 95, 205, 20, m.body, 4);
-  add('vise body', -78, -240, 20, 78, 195, fl - 10, m.body, 5);
-  add(null, -70, -230, fl - 10, 70, 190, fl, m.jaw);
+  // base and body (the body is 300 mm long so it sits on the 305 mm table; the handle overhangs the front)
+  add('vise base', -85, -150, 0, 85, 150, 20, m.body, 4);
+  add('vise body', -70, -140, 20, 70, 140, fl - 10, m.body, 5);
+  add(null, -64, -135, fl - 10, 64, 135, fl, m.jaw);
   // fixed jaw at the back (+Y), moving jaw at the front (-Y)
   add('fixed jaw', -jw, W / 2 + 6, fl, jw, W / 2 + th, jt, m.body, 3);
   add('fixed jaw plate', -jw, W / 2, fl + 4, jw, W / 2 + 6, jt, m.jaw);
   add('moving jaw', -jw, -W / 2 - th, fl, jw, -W / 2 - 6, jt, m.body, 3);
   add('moving jaw plate', -jw, -W / 2 - 6, fl + 4, jw, -W / 2, jt, m.jaw);
   // rear jaw support block
-  add('vise body', -78, W / 2 + th, fl - 10, 78, Math.min(195, W / 2 + th + 40), fl + 20, m.body, 4);
+  add('vise body', -70, W / 2 + th, fl - 10, 70, Math.min(140, W / 2 + th + 30), fl + 20, m.body, 4);
   // parallels under the stock
   if (place.bottom > fl + 0.5) {
     for (const s of [-1, 1]) {
       const yc = s * (W / 2 - 7);
-      add(null, -75, yc - 2.5, fl, 75, yc + 2.5, place.bottom, m.parallel);
+      add(null, -68, yc - 2.5, fl, 68, yc + 2.5, place.bottom, m.parallel);
     }
   }
-  // screw and handle out of the front of the vise
-  const screw = new THREE.Mesh(new THREE.CylinderGeometry(11, 11, 60, 16), m.jaw);
+  // long acme screw and crank out of the front of the vise (-Y is the front, +Z in three.js)
+  const screw = new THREE.Mesh(new THREE.CylinderGeometry(10, 10, 110, 16), m.jaw);
   screw.rotation.x = Math.PI / 2;
-  screw.position.set(0, 45, 255 + 30);
+  screw.position.set(0, 45, 150 + 40);
   g.add(screw);
-  const hub = new THREE.Mesh(new THREE.CylinderGeometry(18, 18, 30, 6), m.dark);
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(16, 16, 26, 6), m.dark);
   hub.rotation.x = Math.PI / 2;
-  hub.position.set(0, 45, 320);
+  hub.position.set(0, 45, 150 + 100);
   g.add(hub);
-  const bar = new THREE.Mesh(new THREE.CylinderGeometry(7, 7, 220, 12), m.dark);
+  const bar = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 170, 12), m.dark);
   bar.rotation.z = Math.PI / 2;
-  bar.position.set(0, 45, 330);
+  bar.position.set(0, 45, 150 + 110);
   g.add(bar);
-  boxes.push({ name: 'vise handle', min: [-110, -350, 30], max: [110, -255, 60] });
+  boxes.push({ name: 'vise handle', min: [-85, -270, 30], max: [85, -150, 60] });
   // clamps holding the vise to the T-slots
   for (const s of [-1, 1]) {
-    add(null, s * 95, -40, 0, s * 95 + s * 40, 40, 14, m.dark);
+    add(null, s * 85, -40, 0, s * 85 + s * 34, 40, 14, m.dark);
     const bolt = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 40, 6), m.dark);
-    bolt.position.set(s * 112, 20, 0);
+    bolt.position.set(s * 100, 20, 0);
     g.add(bolt);
   }
   return { group: g, boxes };

@@ -55,20 +55,20 @@ function fluteGeometry(tool, fluteLen) {
       const g = Math.pow(Math.max(0, Math.sin(ph)), 0.7) * depth;
       const rr = r * s * (1 - g * Math.min(1, y / Math.max(0.6, tipH * 0.5 + 0.6)) * (y > 0.01 ? 1 : 0) - 0) ;
       const a = th + y * twist;
-      pos.push(Math.cos(a) * rr, -y, Math.sin(a) * rr);
+      pos.push(Math.cos(a) * rr, y, Math.sin(a) * rr); // y measured UP from the tip (the group is shifted to -L afterwards)
     }
   }
   const row = segs + 1;
   for (let k = 0; k < rings; k++) {
     for (let i = 0; i < segs; i++) {
       const a = k * row + i, b = a + 1, c = a + row, d = c + 1;
-      idx.push(a, c, b, b, c, d);
+      idx.push(a, b, c, b, d, c);
     }
   }
   // tip cap
   const center = pos.length / 3;
   pos.push(0, 0, 0);
-  for (let i = 0; i < segs; i++) idx.push(center, i, i + 1);
+  for (let i = 0; i < segs; i++) idx.push(center, i + 1, i);
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setIndex(idx);
@@ -158,13 +158,13 @@ export function buildToolModel(tool) {
     g.add(sh);
   }
   // Coloured ring so you can see the spindle turning.
+  M.markGeo = M.markGeo || new THREE.BoxGeometry(4, 10, 3);
+  M.mark = M.mark || new THREE.MeshStandardMaterial({ color: 0x2f7de1, metalness: 0.3, roughness: 0.5 });
+  M.bandGeo = M.bandGeo || new THREE.TorusGeometry(31.9, 0.9, 6, 36);
   const band = new THREE.Mesh(M.bandGeo, M.holderDark);
   band.rotation.x = Math.PI / 2;
   band.position.y = -8;
   g.add(band);
-  M.markGeo = M.markGeo || new THREE.BoxGeometry(4, 10, 3);
-  M.mark = M.mark || new THREE.MeshStandardMaterial({ color: 0x2f7de1, metalness: 0.3, roughness: 0.5 });
-  M.bandGeo = M.bandGeo || new THREE.TorusGeometry(31.9, 0.9, 6, 36);
   const mark = new THREE.Mesh(M.markGeo, M.mark);
   mark.position.set(0, -27, tool.type === 'face' ? 21.5 : 22.2);
   g.add(mark);

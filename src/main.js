@@ -22,6 +22,9 @@ import { UI } from './ui/ui.js';
 import { buildWorkshop } from './scene/workshop.js';
 import { Game } from './game/game.js';
 import { applyZMapState, zmapFromState } from './game/partstore.js';
+import { HaasControl, haasDialect } from './ui/haas/haas.js';
+import { makeProgramLookup } from './gcode/haas.js';
+import { getExampleHaas } from './gcode/examples-haas.js';
 
 const STORE = 'milllab.v1';
 const $ = (s) => document.querySelector(s);
@@ -41,7 +44,7 @@ const TABLE = MACHINE.table;
 class App {
   constructor() {
     const s = loadStore();
-    this.settings = { ...DEFAULT_SETTINGS, ...(s.settings || {}) };
+    this.settings = { ...DEFAULT_SETTINGS, control: 'haas', ...(s.settings || {}) }; // control: 'haas' (NGC-style) | '808d'
     this.settings.wal = { ...DEFAULT_SETTINGS.wal, ...(this.settings.wal || {}) };
     this.tools = (s.tools && s.tools.length ? s.tools : DEFAULT_TOOLS).map((t) => ({ dLength: 0, dRadius: 0, ...t }));
     this.programs = new ProgramStore();
@@ -50,6 +53,8 @@ class App {
       const r = JSON.parse(localStorage.getItem('milllab.r') || 'null');
       if (Array.isArray(r)) r.forEach((v, i) => { if (i < 300 && isFinite(v)) this.R[i] = v; });
     } catch { /* ignore */ }
+    this.macroVars = {};
+    try { Object.assign(this.macroVars, JSON.parse(localStorage.getItem('milllab.vars') || '{}')); } catch { /* ignore */ }
     this.stock = { ...DEFAULT_STOCK, ...(s.stock || {}) };
     this.offsets = s.offsets && s.offsets.length === 6 ? s.offsets.map((o) => ({ ...o })) : null;
     this.programText = s.program ?? null;
@@ -109,8 +114,12 @@ class App {
 
     const cur = this.programs.current && this.programs.has(this.programs.current) ? this.programs.current : null;
     if (cur) this.openProgram(cur);
+    else if (this.settings.control !== '808d') this.loadExampleHaas('haas-part');
     else this.loadExample808('sie-full', true);
     this.ui.init();
+    // NGC-style control (pendant keyboard + screen); the 808D-style control stays available
+    this.haas = new HaasControl(this);
+    this.haas.init();
     this.applyVisualSettings();
     this.ui.loading('Building the workshop…');
     await nextFrame();
@@ -128,7 +137,8 @@ class App {
     this.ui.loading(null);
     this.last = performance.now();
     this.uiTimer = 0;
-    this.screenTimer = 0;
+    this.screenTimer = 1; // draw the pendant screen on the very first frame
+    try { this.drawPendantScreen(); } catch (e) { /* fonts/ui not ready: the first frame redraws */ }
     this.fpsAcc = { n: 0, t: 0 };
     const loop = (now) => {
       if (!window.__pauseRender) this.frame(now);
@@ -248,7 +258,8 @@ class App {
 
   // ------------------------------------------------------------------ program
   dialect() {
-    return detectDialect(this.ui.editor.getValue(), this.settings.dialect);
+    const t = this.ui.editor.getValue();
+    return detectDialect(t, this.defaultDialect(t));
   }
 
   compileOpts() {
@@ -257,14 +268,43 @@ class App {
     return {
       tools: this.toolMap(), offsets: this.offsets, requireG43: this.settings.requireG43, arcTol: acc.arcTol, blockDelete: this.settings.blockDelete,
       dialect: this.settings.dialect, limits: w.on ? { x: w.x, y: w.y, z: w.z } : null,
+      programLookup: this._lookup || (this._lookup = makeProgramLookup(this.programs)), macroVars: this.macroVars,
     };
+  }
+
+  // Default dialect of a program without a G290/G291 or %/O header: the NGC-style control reads Haas
+  // G-code; older Siemens-mode programs (cycles, ";" comments, R parameters) still compile as before.
+  defaultDialect(text) {
+    if (!this.haas?.active) return this.settings.dialect;
+    const sie = /^\s*;|\b(CYCLE\d+|POCKET[34]|MCALL|SLOT[12]|LONGHOLE|HOLES[12]|MSG\s*\(|G500|GOTO[FB]|SUPA|TRANS|AROT)\b|\bR\d+\s*=|\bD\d+\b/m;
+    return sie.test(text.slice(0, 20000)) ? 'siemens' : haasDialect();
+  }
+
+  saveVars() {
+    try { localStorage.setItem('milllab.vars', JSON.stringify(this.macroVars)); } catch { /* ignore */ }
+  }
+
+  // G10 L10-L13 / #2001.. writes from a Haas program: geometry and wear land in the offsets, the
+  // physical cutter stays as it is (dLength / dRadius carry the difference).
+  applyToolWrites(list) {
+    if (!list?.length) return;
+    for (const w of list) {
+      const t = this.tools.find((x) => x.number === w.tool);
+      if (!t) continue;
+      t.dLength = Math.round((w.length + w.dLength - t.length - (t.hWear || 0) + (t.hWear || 0)) * 1e4) / 1e4;
+      t.dRadius = Math.round((w.diameter / 2 + w.dRadius - t.diameter / 2) * 1e4) / 1e4;
+    }
+    this.toolsChanged(false);
+    this.ui.log(`Tool offsets written by the program: ${[...new Set(list.map((w) => 'T' + w.tool))].join(' ')}`);
   }
 
   compile() {
     const c = this.controller;
     const text = this.ui.editor.getValue();
     const t0 = performance.now();
-    const res = compileProgram(text, this.compileOpts(), { pos: { ...c.pos }, tool: c.tool, carousel: c.carousel, rpm: Math.abs(c.spindle.rpm), units: this.settings.defaultUnits, R: this.R });
+    const opts = this.compileOpts();
+    opts.dialect = this.defaultDialect(text);
+    const res = compileProgram(text, opts, { pos: { ...c.pos }, tool: c.tool, carousel: c.carousel, rpm: Math.abs(c.spindle.rpm), units: this.settings.defaultUnits, R: this.R });
     res.compileMs = performance.now() - t0;
     this.compiled = res;
     if (!c.exec || c.exec.kind !== 'program') {
@@ -285,7 +325,7 @@ class App {
     delete modal.codes;
     if (modal.mcall) delete modal.mcall;
     const opts = this.compileOpts();
-    opts.forceDialect = modal.dialect === 'iso' ? 'iso' : detectDialect(text, 'siemens');
+    opts.forceDialect = this.haas?.active ? detectDialect(text, haasDialect()) : modal.dialect === 'iso' ? 'iso' : modal.dialect === 'haas' || this.settings.dialect === 'haas' ? 'haas' : detectDialect(text, 'siemens');
     return compileProgram(text, opts, { pos: { ...c.pos }, tool: c.tool, carousel: c.carousel, rpm: Math.abs(c.spindle.rpm), modal, R: this.R });
   }
 
@@ -369,6 +409,22 @@ class App {
     } else if (!initial) this.ui.log(`${ex.file}: ${ex.name}. Blank ${ex.stock.x} × ${ex.stock.y} × ${ex.stock.z} mm ${MATERIALS[ex.stock.material].short}, G54 at the top centre.`);
   }
 
+  // A Haas example from the control's USB stick: into memory as Onnnnn.MPF, with its blank and G54
+  // (top centre) unless the workshop's real blank is in the vise.
+  loadExampleHaas(id) {
+    const ex = getExampleHaas(id);
+    if (!ex) return;
+    if (this.controller.exec) this.controller.stop();
+    if (!this.game?.manualBlanks && ex.stock) {
+      this.stock = { ...this.stock, protrusion: 14, ...ex.stock };
+      this.rebuildStock();
+      this.setZeroFromStock('top-center', 0, true);
+    }
+    const name = ex.file.replace(/\.NC$/i, '.MPF');
+    this.programs.put(name, ex.code);
+    this.openProgram(name);
+  }
+
   applyControllerSettings() {
     const c = this.controller;
     const s = this.settings;
@@ -449,6 +505,8 @@ class App {
         this.R.set(this.compiled.endR);
         this.saveR();
       }
+      if (this.compiled?.endVars) { Object.assign(this.macroVars, this.compiled.endVars); this.saveVars(); }
+      this.applyToolWrites(this.compiled?.toolOffsetWrites);
       this.wearCheck();
     });
     c.on('mdiDone', () => {
@@ -456,6 +514,8 @@ class App {
         this.R.set(this.mdaResult.endR);
         this.saveR();
       }
+      if (this.mdaResult?.endVars) { Object.assign(this.macroVars, this.mdaResult.endVars); this.saveVars(); }
+      this.applyToolWrites(this.mdaResult?.toolOffsetWrites);
       this.ui.hmi.rerender();
     });
     c.on('mode', () => {
@@ -633,6 +693,7 @@ class App {
     m.update({
       x: c.pos.x, y: c.pos.y, z: c.pos.z, lift: c.atc.lift, spindleAngle: visualAngle(c, dt, this), door: c.door.pos,
       atcSlide: c.atc.slide, atcAngle: c.atc.angle, spindleTool: c.tool, state: c.state, estop: c.estop,
+      control: this.haas?.active ? 'haas' : '808d', beacon: this.haas?.active ? this.haas.beaconNow || 'off' : null, haasEstop: this.haas?.estopLatched,
     });
     this.stockMesh.update();
     this.stockMesh.setWet(c.coolant.flood ? Math.min(1, (this.wet = Math.min(1, (this.wet || 0) + dt * 0.6))) : (this.wet = Math.max(0, (this.wet || 0) - dt * 0.05)));
@@ -687,6 +748,7 @@ class App {
 
   // ------------------------------------------------------------------ pendant screen texture
   drawPendantScreen() {
+    if (this.haas?.active) return this.haas.drawScreen(this.machine.screenCanvas);
     const cv = this.machine.screenCanvas;
     const g = cv.getContext('2d');
     const c = this.controller;

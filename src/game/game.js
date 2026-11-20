@@ -13,7 +13,8 @@ import { GameUI } from './ui-game.js';
 import { partStore, zmapState, zmapFromState } from './partstore.js';
 import { ZMap } from '../sim/zmap.js';
 import { TUTORIAL_PART } from './tutorial-part.js';
-import { tutorialTemplate } from './tutorial-template.js';
+import { tutorialTemplate, haasTutorialTemplate } from './tutorial-template.js';
+import { haasSolution } from './solutions-haas.js';
 
 // Job lookup: the ten jobs on the board plus the tutorial job T01.
 export function findPart(id) {
@@ -689,7 +690,20 @@ export class Game {
   }
 
   programTemplate(p) {
-    if (p.id === TUTORIAL_PART.id) return tutorialTemplate();
+    const haas = !!this.app.haas?.active; // NGC-style control: Haas dialect
+    if (p.id === TUTORIAL_PART.id) return haas ? haasTutorialTemplate() : tutorialTemplate();
+    if (haas) {
+      const n = String(100 + (parseInt(p.id.slice(1), 10) || 0)).padStart(5, '0');
+      const fc = r3(p.stock.z - p.size.z);
+      return [
+        '%', `O${n} (JOB_${p.id} ${p.title.toUpperCase()})`, `(DRG ${p.drawingNo} REV ${p.rev} - ${p.customer.toUpperCase()})`,
+        `(BLANK ${p.stock.x} X ${p.stock.y} X ${p.stock.z} - FINISHED ${p.size.x} X ${p.size.y} X ${p.size.z})`,
+        '(G54 = TOP FRONT-LEFT CORNER OF THE RAW BLANK, Z0 = TOP OF THE RAW BLANK)',
+        `(FACE OFF ${fc} MM: FINISHED TOP AT Z-${fc}.)`, '(T1 FACE MILL D50 - T2 END MILL D10 - T3 END MILL D6 - T4 SPOT DRILL D10 - T5 DRILL D6.8)',
+        'G21', 'G00 G17 G40 G49 G80 G90', 'T1 M06', 'G00 G90 G54 X0. Y0.', 'S3200 M03', 'G43 H01 Z25. M08', '',
+        '(YOUR MACHINING HERE: EDIT, F4 FOR THE VPS TEMPLATES)', '', 'G00 Z25. M09', 'M05', 'G28 G91 Z0.', 'G28 G91 Y0.', 'M30', '%', '',
+      ].join('\n');
+    }
     const MAT = { aluminium: 'ALUMINIUM', steel: 'STEEL', brass: 'BRASS', plastic: 'ACETAL' };
     const face = r3(p.stock.z - p.size.z);
     return [
@@ -720,7 +734,7 @@ export class Game {
     const app = this.app;
     if (app.controller.exec) return this.ui.toast('Stop the running program first.', 'warn');
     const name = `JOB_${part.id}_REF.MPF`;
-    app.programs.put(name, part.solution);
+    app.programs.put(name, (app.haas?.active && haasSolution(part.id)) || part.solution);
     app.openProgram(name);
     app.ui.log(`${name}: reference program for ${part.id} loaded and selected`);
     this.ui.toast(`${name} loaded and selected. Set G54 on the top front-left corner of the raw blank before you run it.`, 'ok', 5200);

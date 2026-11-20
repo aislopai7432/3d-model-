@@ -1,0 +1,1095 @@
+// Haas NGC mill programs for every workshop job (P01..P10, src/game/parts.js) and the tutorial part
+// (T01, src/game/tutorial-part.js), written the way a Haas programmer would write them.
+//
+// Setup (same as the 808D reference programs): G54 X0 Y0 = TOP FRONT-LEFT corner of the RAW blank,
+// Z0 = top of the raw blank. Every job faces 1 mm off, so the finished top is Z-1. and a feature floor
+// is at Z = -1. - drawing depth. Drilled hole depths are to the full diameter: the 118 deg point of the
+// D6.8 drill adds 2.04, so tip Z = -1. - depth - 2.04.
+//
+// Default tool library (src/config.js): T1 face mill D50, T2 end mill D10, T3 end mill D6, T4 spot drill
+// D10 x 90 deg, T5 twist drill D6.8 x 118 deg. H and D registers are the tool numbers (G43 H02, G41 D02).
+//
+// Haas style used throughout:
+//   %  /  Onnnnn (NAME)  /  G21 + safety line  /  T M06  /  G00 G90 G54 X Y  /  S M03  /  G43 H Z M08
+//   one M code per block, decimal points on every coordinate and feed (X10 would be 0.010 mm!),
+//   canned cycles G81 (spot) / G83 (peck) with G98/G99, bolt patterns G70 (circle) and G72 (row),
+//   G12/G13 circular pockets, G150 pockets and slots with the outline in a local N subprogram,
+//   G41 D climb milling for walls and islands, M97 local subprograms with L repeats for depth levels,
+//   G28 G91 Z0. between tools, G28 G91 Y0. to bring the table forward at the end, M30.
+//   Local subprograms (M97 targets and G150 outlines) follow the M30 and end with M99.
+// No M01 optional stops: the simulator's Optional Stop is on by default and would hold at every tool.
+
+// ------------------------------------------------------------------------------------------ P01
+const P01 = `%
+O01001 (P01 LOCATING PLATE)
+(DRG ML-1001 REV A - NORTHBRIDGE FIXTURES)
+(BLANK 100 X 60 X 21 ALUMINIUM - FINISHED 100 X 60 X 20)
+(G54 X0 Y0 = FRONT LEFT CORNER OF THE RAW BLANK, Z0 = TOP OF THE RAW BLANK)
+(FINISHED TOP AT Z-1. - FEATURE FLOOR = -1. MINUS THE DRAWING DEPTH)
+(T1 FACE MILL D50 - T2 END MILL D10)
+G21 (METRIC)
+G00 G17 G40 G49 G80 G90 (SAFETY LINE)
+(OP1 - FACE 1 MM OFF THE TOP, TWO ZIG-ZAG PASSES ALONG X)
+T1 M06 (FACE MILL D50)
+G00 G90 G54 X-30. Y10.
+S3200 M03
+G43 H01 Z25. M08
+Z2.
+G01 Z-1. F600. (FEED DOWN OUTSIDE THE BLANK)
+X130. F1300.
+Y50.
+X-30.
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP2 - POCKET A 50 X 30 R6 DEPTH 5 = FLOOR Z-6., G150 FROM THE CENTRE, OUTLINE N100)
+T2 M06 (END MILL D10)
+G00 G90 G54 X50. Y30.
+S9500 M03
+G43 H02 Z25. M08
+Z2.
+(R0. = 1 MM ABOVE THE FACED TOP, Q3. = TWO LEVELS Z-3. AND Z-6., J4. = 4 MM STEP-OVER IN Y)
+(K0.2 = WALL ALLOWANCE FOR THE FINISH LAP, G41 D02 = CLIMB WITH THE D10 RADIUS)
+G150 X50. Y30. P100 J4. K0.2 G41 D02 Z-6. R0. Q3. F1400.
+G40 G01 X50. Y30.
+G00 Z25. M09
+M05
+G28 G91 Z0.
+G28 G91 Y0.
+M30
+N100 (POCKET A OUTLINE - START X50. Y30. TO THE EDGE, CCW, BACK TO THE EDGE POINT)
+G01 Y15.
+X69.
+G03 X75. Y21. R6.
+G01 Y39.
+G03 X69. Y45. R6.
+G01 X31.
+G03 X25. Y39. R6.
+G01 Y21.
+G03 X31. Y15. R6.
+G01 X50.
+M99
+%
+`;
+
+// ------------------------------------------------------------------------------------------ P02
+const P02 = `%
+O01002 (P02 COVER PLATE)
+(DRG ML-1002 REV A - HARROW AND LYLE PUMPS)
+(BLANK 120 X 70 X 16 ALUMINIUM - FINISHED 120 X 70 X 15)
+(G54 X0 Y0 = FRONT LEFT CORNER OF THE RAW BLANK, Z0 = TOP OF THE RAW BLANK)
+(FINISHED TOP AT Z-1. - 7 HOLES D6.8 X 10 DEEP = DRILL TIP Z-13.04)
+(T1 FACE MILL D50 - T4 SPOT DRILL D10 - T5 DRILL D6.8)
+G21 (METRIC)
+G00 G17 G40 G49 G80 G90 (SAFETY LINE)
+(OP1 - FACE 1 MM OFF THE TOP, THREE PASSES ALONG X)
+T1 M06 (FACE MILL D50)
+G00 G90 G54 X-30. Y10.
+S3200 M03
+G43 H01 Z25. M08
+Z2.
+G01 Z-1. F600.
+X150. F1300.
+Y35.
+X-30.
+Y60.
+X150.
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP2 - SPOT DRILL 7 HOLES, TIP Z-3.5 = 2.5 BELOW THE FACED TOP = D5 SPOT)
+T4 M06 (SPOT DRILL D10 90 DEG)
+G00 G90 G54 X10. Y10.
+S6000 M03
+G43 H04 Z25. M08
+G81 G99 Z-3.5 R1. F500. (HOLE A - G99 RETURNS TO THE R PLANE BETWEEN HOLES)
+X110. (B)
+Y60. (D)
+X10. (C)
+G80
+G00 X30. Y35. (FIRST HOLE OF THE MIDDLE ROW)
+G81 G99 Z-3.5 R1. F500. L0 (L0 = ARM THE CYCLE WITHOUT A HOLE HERE)
+G72 I30. J0. L3 (E F G - 3 HOLES 30 APART ALONG 0 DEG, THE FIRST AT X30.)
+G80
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP3 - PECK DRILL D6.8, DEPTH 10 + 2.04 POINT = TIP Z-13.04, 3 MM PECKS)
+T5 M06 (TWIST DRILL D6.8 118 DEG)
+G00 G90 G54 X10. Y10.
+S4500 M03
+G43 H05 Z25. M08
+G83 G99 Z-13.04 R1. Q3. F600. (A)
+X110. (B)
+Y60. (D)
+X10. (C)
+G80
+G00 X30. Y35.
+G83 G99 Z-13.04 R1. Q3. F600. L0
+G72 I30. J0. L3 (E F G)
+G80
+G00 Z25. M09
+M05
+G28 G91 Z0.
+G28 G91 Y0.
+M30
+%
+`;
+
+// ------------------------------------------------------------------------------------------ P03
+const P03 = `%
+O01003 (P03 GUIDE BLOCK)
+(DRG ML-1003 REV B - FENWICK CONVEYOR SYSTEMS)
+(BLANK 110 X 70 X 26 ACETAL - FINISHED 110 X 70 X 25)
+(G54 X0 Y0 = FRONT LEFT CORNER OF THE RAW BLANK, Z0 = TOP OF THE RAW BLANK)
+(FINISHED TOP AT Z-1. - FEATURE FLOOR = -1. MINUS THE DRAWING DEPTH)
+(T1 FACE MILL D50 - T2 END MILL D10 - T3 END MILL D6)
+G21 (METRIC)
+G00 G17 G40 G49 G80 G90 (SAFETY LINE)
+(OP1 - FACE 1 MM OFF THE TOP)
+T1 M06 (FACE MILL D50)
+G00 G90 G54 X-30. Y10.
+S3000 M03
+G43 H01 Z25. M08
+Z2.
+G01 Z-1. F700.
+X140. F1500.
+Y35.
+X-30.
+Y60.
+X140.
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP2 - POCKET A 40 X 50 R6 DEPTH 6 = FLOOR Z-7., G150 OUTLINE N100)
+T2 M06 (END MILL D10)
+G00 G90 G54 X28. Y35.
+S9000 M03
+G43 H02 Z25. M08
+Z2.
+G150 X28. Y35. P100 J4. K0.2 G41 D02 Z-7. R0. Q3.5 F1600.
+G40 G01 X28. Y35.
+G00 Z2.
+(OP3 - SLOT B 10 WIDE = THE CUTTER, X60.-X95. AT Y50., FLOOR Z-5., RAMPED IN TWO LEVELS)
+X60. Y50.
+G01 Z-1. F500.
+X95. Z-3. (RAMP DOWN ALONG THE SLOT)
+X60. F1600. (CLEAN THE RAMP AT Z-3.)
+X95. Z-5. F500.
+X60. F1600.
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP4 - SLOT C 8 WIDE, X60.-X95. AT Y18., FLOOR Z-4., G150 OUTLINE N300 WITH THE D6)
+T3 M06 (END MILL D6)
+G00 G90 G54 X77.5 Y18.
+S10000 M03
+G43 H03 Z25. M08
+Z2.
+G150 X77.5 Y18. P300 J2. K0.2 G41 D03 Z-4. R0. Q2. F1200.
+G40 G01 X77.5 Y18.
+G00 Z25. M09
+M05
+G28 G91 Z0.
+G28 G91 Y0.
+M30
+N100 (POCKET A OUTLINE - START X28. Y35., CCW)
+G01 Y10.
+X42.
+G03 X48. Y16. R6.
+G01 Y54.
+G03 X42. Y60. R6.
+G01 X14.
+G03 X8. Y54. R6.
+G01 Y16.
+G03 X14. Y10. R6.
+G01 X28.
+M99
+N300 (SLOT C OUTLINE - START ON THE SLOT CENTRE LINE, CCW, R4 ENDS)
+G01 Y14.
+X95.
+G03 X95. Y22. R4.
+G01 X60.
+G03 X60. Y14. R4.
+G01 X77.5
+M99
+%
+`;
+
+// ------------------------------------------------------------------------------------------ P04
+const P04 = `%
+O01004 (P04 BEARING CAP)
+(DRG ML-1004 REV A - ALDMOOR GEARWORKS)
+(BLANK 90 X 90 X 21 ALUMINIUM - FINISHED 90 X 90 X 20)
+(G54 X0 Y0 = FRONT LEFT CORNER OF THE RAW BLANK, Z0 = TOP OF THE RAW BLANK)
+(BEARING SEAT D40 +-0.05 X 8 DEEP = FLOOR Z-9., 6 HOLES D6.8 X 12 ON PCD 66 = TIP Z-15.04)
+(T1 FACE MILL D50 - T2 END MILL D10 - T4 SPOT DRILL D10 - T5 DRILL D6.8)
+G21 (METRIC)
+G00 G17 G40 G49 G80 G90 (SAFETY LINE)
+(OP1 - FACE 1 MM OFF THE TOP)
+T1 M06 (FACE MILL D50)
+G00 G90 G54 X-30. Y10.
+S3200 M03
+G43 H01 Z25. M08
+Z2.
+G01 Z-1. F600.
+X120. F1300.
+Y45.
+X-30.
+Y80.
+X120.
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP2 - BEARING SEAT D40, G13 SPIRAL OUT FROM THE CENTRE, 4 PASSES OF 2 MM)
+T2 M06 (END MILL D10)
+G00 G90 G54 X45. Y45.
+S9500 M03
+G43 H02 Z25. M08
+Z2.
+G01 Z-1. F400. (START ON THE FACED TOP)
+(G91 Z-2. L4 = FOUR 2 MM STEPS TO Z-9., I8. FIRST CIRCLE R8, K20. FINISH R20, Q4. STEP, D02 = R5 COMP)
+G13 G91 Z-2. I8. K20. Q4. D02 L4 F1400.
+G90 G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP3 - SPOT DRILL 6 HOLES ON PCD 66, FIRST HOLE ON THE X AXIS OF THE BORE)
+T4 M06 (SPOT DRILL D10 90 DEG)
+G00 G90 G54 X45. Y45. (BOLT CIRCLE CENTRE)
+S6000 M03
+G43 H04 Z25. M08
+G81 G99 Z-3.5 R1. F500. L0 (L0 = NO HOLE AT THE CENTRE)
+G70 I33. J0. L6 (RADIUS 33, START 0 DEG, 6 HOLES)
+G80
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP4 - PECK DRILL D6.8, DEPTH 12 + 2.04 POINT = TIP Z-15.04)
+T5 M06 (TWIST DRILL D6.8 118 DEG)
+G00 G90 G54 X45. Y45.
+S4500 M03
+G43 H05 Z25. M08
+G83 G99 Z-15.04 R1. Q3. F600. L0
+G70 I33. J0. L6
+G80
+G00 Z25. M09
+M05
+G28 G91 Z0.
+G28 G91 Y0.
+M30
+%
+`;
+
+// ------------------------------------------------------------------------------------------ P05
+const P05 = `%
+O01005 (P05 SHOULDER BLOCK)
+(DRG ML-1005 REV A - CORRIGAN RAIL COMPONENTS)
+(BLANK 100 X 60 X 31 ALUMINIUM - FINISHED 100 X 60 X 30)
+(G54 X0 Y0 = FRONT LEFT CORNER OF THE RAW BLANK, Z0 = TOP OF THE RAW BLANK)
+(LEFT STEP X0-X20. FLOOR Z-11., BACK STEP Y45.-Y60. FLOOR Z-7.)
+(HOLES C D ON THE LEFT STEP - TIP Z-21.04, HOLES E F ON THE TOP - TIP Z-15.04)
+(T1 FACE MILL D50 - T2 END MILL D10 - T4 SPOT DRILL D10 - T5 DRILL D6.8)
+G21 (METRIC)
+G00 G17 G40 G49 G80 G90 (SAFETY LINE)
+(OP1 - FACE 1 MM OFF THE TOP)
+T1 M06 (FACE MILL D50)
+G00 G90 G54 X-30. Y10.
+S3200 M03
+G43 H01 Z25. M08
+Z2.
+G01 Z-1. F600.
+X130. F1300.
+Y50.
+X-30.
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP2 - LEFT STEP 20 WIDE X 10 DEEP: 4 LEVELS OF 2.5 IN SUBPROGRAM N100, THEN A G41 WALL PASS)
+T2 M06 (END MILL D10)
+G00 G90 G54 X1. Y-8. (OUTSIDE THE FRONT OF THE BLANK)
+S9500 M03
+G43 H02 Z25. M08
+Z2.
+G01 Z-1. F400.
+M97 P100 L4 (Z-3.5, Z-6., Z-8.5, Z-11.)
+G41 D02 X20. Y-3. F1000. (WALL X20. - CLIMB, TOOL ON THE LEFT GOING +Y)
+Y68.
+G40 X1.
+G00 Z1.
+(OP3 - BACK STEP 15 WIDE X 6 DEEP: 3 LEVELS OF 2 IN SUBPROGRAM N200, THEN A G41 WALL PASS)
+X108. Y57. (OUTSIDE THE RIGHT END)
+G01 Z-1. F400.
+M97 P200 L3 (Z-3., Z-5., Z-7.)
+X-8. F1400.
+G41 D02 Y45. F1000. (WALL Y45. - CLIMB, TOOL ON THE LEFT GOING +X)
+X108.
+G40 Y57.
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP4 - SPOT DRILL ON TWO LEVELS, G98 = BACK TO Z25. BETWEEN HOLES OVER THE STEP WALLS)
+T4 M06 (SPOT DRILL D10 90 DEG)
+G00 G90 G54 X10. Y15.
+S6000 M03
+G43 H04 Z25. M08
+G81 G98 Z-13.5 R-10. F500. (C ON THE STEP - R 1 MM ABOVE THE STEP FLOOR Z-11.)
+Y32. (D)
+X45. Y22. Z-3.5 R1. (E ON THE TOP - NEW Z AND R)
+X80. (F)
+G80
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP5 - PECK DRILL: C D DEPTH 18 FROM THE TOP = TIP Z-21.04, E F DEPTH 12 = TIP Z-15.04)
+T5 M06 (TWIST DRILL D6.8 118 DEG)
+G00 G90 G54 X10. Y15.
+S4500 M03
+G43 H05 Z25. M08
+G83 G98 Z-21.04 R-10. Q3. F600. (C)
+Y32. (D)
+X45. Y22. Z-15.04 R1. (E)
+X80. (F)
+G80
+G00 Z25. M09
+M05
+G28 G91 Z0.
+G28 G91 Y0.
+M30
+N100 (LEFT STEP - ONE LEVEL: 2.5 DOWN, STROKES AT X1. X8. X14.8, BACK TO X1. Y-8. OUTSIDE THE PART)
+G91 G01 Z-2.5 F400.
+G90 Y68. F1400.
+X8.
+Y-8.
+X14.8 (LEAVES 0.2 ON THE WALL FOR THE G41 PASS)
+Y68.
+X-8.
+Y-8.
+X1.
+M99
+N200 (BACK STEP - ONE LEVEL: 2 DOWN, STROKES AT Y57. AND Y50.2, BACK TO X108. Y57.)
+G91 G01 Z-2. F400.
+G90 X-8. F1400.
+Y50.2 (LEAVES 0.2 ON THE WALL)
+X108.
+Y57.
+M99
+%
+`;
+
+// ------------------------------------------------------------------------------------------ P06
+const P06 = `%
+O01006 (P06 CAM FOLLOWER BASE)
+(DRG ML-1006 REV C - PENHALLOW PACKAGING MACHINES)
+(BLANK 100 X 80 X 26 ALUMINIUM - FINISHED 100 X 80 X 25)
+(G54 X0 Y0 = FRONT LEFT CORNER OF THE RAW BLANK, Z0 = TOP OF THE RAW BLANK)
+(ISLAND 70 X 50 R8 +-0.05 ON X50. Y40., FLANGE FLOOR Z-7., RECESS D24 FLOOR Z-6.)
+(4 HOLES ON THE FLANGE, DEPTH 14 FROM THE TOP = TIP Z-17.04)
+(T1 FACE MILL D50 - T2 END MILL D10 - T4 SPOT DRILL D10 - T5 DRILL D6.8)
+G21 (METRIC)
+G00 G17 G40 G49 G80 G90 (SAFETY LINE)
+(OP1 - FACE 1 MM OFF THE TOP)
+T1 M06 (FACE MILL D50)
+G00 G90 G54 X-30. Y10.
+S3200 M03
+G43 H01 Z25. M08
+Z2.
+G01 Z-1. F600.
+X130. F1300.
+Y40.
+X-30.
+Y70.
+X130.
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP2 - ISLAND: 3 LEVELS OF 2 MM IN SUBPROGRAM N100 - OUTER LAP, ROUGH G41 LAP, FINISH G41 LAP)
+T2 M06 (END MILL D10)
+G00 G90 G54 X-8. Y3. (OUTSIDE THE LEFT END)
+S9500 M03
+G43 H02 Z25. M08
+Z2.
+G01 Z-1. F400.
+M97 P100 L3 (Z-3., Z-5., Z-7.)
+G00 Z25.
+(OP3 - RECESS D24 X 5 DEEP IN THE ISLAND, FLOOR Z-6., G13 IN 2 PASSES OF 2.5)
+X50. Y40.
+Z2.
+G01 Z-1. F400.
+G13 G91 Z-2.5 I7. K12. Q4. D02 L2 F1400.
+G90 G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP4 - SPOT DRILL THE 4 FLANGE HOLES, R-6. = 1 ABOVE THE FLANGE, ORDER C D F E AROUND THE ISLAND)
+T4 M06 (SPOT DRILL D10 90 DEG)
+G00 G90 G54 X7.5 Y7.5
+S6000 M03
+G43 H04 Z25. M08
+G81 G99 Z-9.5 R-6. F500. (C)
+X92.5 (D)
+Y72.5 (F)
+X7.5 (E)
+G80
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP5 - PECK DRILL DEPTH 14 FROM THE TOP = TIP Z-17.04)
+T5 M06 (TWIST DRILL D6.8 118 DEG)
+G00 G90 G54 X7.5 Y7.5
+S4500 M03
+G43 H05 Z25. M08
+G83 G99 Z-17.04 R-6. Q3. F600. (C)
+X92.5 (D)
+Y72.5 (F)
+X7.5 (E)
+G80
+G00 Z25. M09
+M05
+G28 G91 Z0.
+G28 G91 Y0.
+M30
+N100 (ISLAND - ONE 2 MM LEVEL, STARTS AND ENDS AT X-8. Y3.)
+G91 G01 Z-2. F400.
+G90 X97. F1400. (OUTER LAP - TOOL CENTRE 3 IN FROM THE BLANK EDGES CLEARS THE CORNERS)
+Y77.
+X3.
+Y3.
+X-8.
+Y40.
+G41 D02 X7. (ROUGH LAP - OUTLINE 8 BIGGER THAN THE ISLAND, R16 CORNERS, CW = CLIMB)
+Y57.
+G02 X23. Y73. R16.
+G01 X77.
+G02 X93. Y57. R16.
+G01 Y23.
+G02 X77. Y7. R16.
+G01 X23.
+G02 X7. Y23. R16.
+G01 Y45.
+G40 X-8.
+Y40.
+G41 D02 X15. (FINISH LAP ON THE ISLAND 70 X 50 R8)
+Y57.
+G02 X23. Y65. R8.
+G01 X77.
+G02 X85. Y57. R8.
+G01 Y23.
+G02 X77. Y15. R8.
+G01 X23.
+G02 X15. Y23. R8.
+G01 Y45.
+G40 X-8.
+Y3.
+M99
+%
+`;
+
+// ------------------------------------------------------------------------------------------ P07
+const P07 = `%
+O01007 (P07 MANIFOLD COVER)
+(DRG ML-1007 REV A - BRIGHTWATER HYDRAULICS)
+(BLANK 110 X 70 X 21 BRASS - FINISHED 110 X 70 X 20)
+(G54 X0 Y0 = FRONT LEFT CORNER OF THE RAW BLANK, Z0 = TOP OF THE RAW BLANK)
+(GASKET RECESS E 44 X 26 R6 +-0.05 FLOOR Z-6., 5 HOLES D6.8 X 15 FROM THE TOP = TIP Z-18.04)
+(COUNTERBORES D11 X 6.5 = FLOOR Z-7.5 ON THE 4 CORNER HOLES)
+(T1 FACE MILL D50 - T2 END MILL D10 - T3 END MILL D6 - T4 SPOT DRILL D10 - T5 DRILL D6.8)
+G21 (METRIC)
+G00 G17 G40 G49 G80 G90 (SAFETY LINE)
+(OP1 - FACE 1 MM OFF THE TOP)
+T1 M06 (FACE MILL D50)
+G00 G90 G54 X-30. Y10.
+S2200 M03
+G43 H01 Z25. M08
+Z2.
+G01 Z-1. F450.
+X140. F900.
+Y35.
+X-30.
+Y60.
+X140.
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP2 - RECESS E, G150 OUTLINE N100, 2 LEVELS FROM R0.)
+T2 M06 (END MILL D10)
+G00 G90 G54 X55. Y35.
+S7000 M03
+G43 H02 Z25. M08
+Z2.
+G150 X55. Y35. P100 J4. K0.2 G41 D02 Z-6. R0. Q3. F900.
+G40 G01 X55. Y35.
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP3 - SPOT DRILL: CORNER HOLES FROM THE TOP, PORT F FROM THE RECESS FLOOR)
+T4 M06 (SPOT DRILL D10 90 DEG)
+G00 G90 G54 X12. Y12.
+S4000 M03
+G43 H04 Z25. M08
+G81 G98 Z-3.5 R1. F300. (A)
+X98. (B)
+Y58. (D)
+X12. (C)
+X55. Y35. Z-8.5 R-5. (F - R 1 MM ABOVE THE RECESS FLOOR Z-6.)
+G80
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP4 - PECK DRILL DEPTH 15 FROM THE TOP = TIP Z-18.04)
+T5 M06 (TWIST DRILL D6.8 118 DEG)
+G00 G90 G54 X12. Y12.
+S3500 M03
+G43 H05 Z25. M08
+G83 G98 Z-18.04 R1. Q3. F350. (A)
+X98. (B)
+Y58. (D)
+X12. (C)
+X55. Y35. R-5. (F)
+G80
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP5 - COUNTERBORES D11 X 6.5 WITH THE D6, G13 IN SUBPROGRAM N400 AT EACH HOLE)
+T3 M06 (END MILL D6)
+G00 G90 G54 X12. Y12.
+S9000 M03
+G43 H03 Z25. M08
+M97 P400 (A)
+G00 X98. Y12.
+M97 P400 (B)
+G00 X98. Y58.
+M97 P400 (D)
+G00 X12. Y58.
+M97 P400 (C)
+G00 Z25. M09
+M05
+G28 G91 Z0.
+G28 G91 Y0.
+M30
+N100 (RECESS E OUTLINE - START X55. Y35., CCW)
+G01 Y22.
+X71.
+G03 X77. Y28. R6.
+G01 Y42.
+G03 X71. Y48. R6.
+G01 X39.
+G03 X33. Y42. R6.
+G01 Y28.
+G03 X39. Y22. R6.
+G01 X55.
+M99
+N400 (COUNTERBORE D11 AT THE CURRENT X Y - DROP INTO THE DRILLED HOLE, 5 PASSES OF 1.3 TO Z-7.5)
+G00 Z1.
+G01 Z-1. F200.
+G13 G91 Z-1.3 I4. K5.5 Q1.5 D03 L5 F700.
+G90 G00 Z1.
+M99
+%
+`;
+
+// ------------------------------------------------------------------------------------------ P08
+const P08 = `%
+O01008 (P08 INDEX PLATE)
+(DRG ML-1008 REV A - LARKSPUR OPTICS)
+(BLANK 120 X 90 X 21 ALUMINIUM - FINISHED 120 X 90 X 20)
+(G54 X0 Y0 = FRONT LEFT CORNER OF THE RAW BLANK, Z0 = TOP OF THE RAW BLANK)
+(POCKET A 50 X 20 R6 TURNED 30 DEG FLOOR Z-6., BORE B D24 +-0.05 FLOOR Z-7.)
+(4 HOLES D6.8 X 10 ON PCD 44 AT 45 DEG = TIP Z-13.04, SLOT G 8 WIDE FLOOR Z-4.)
+(T1 FACE MILL D50 - T2 END MILL D10 - T3 END MILL D6 - T4 SPOT DRILL D10 - T5 DRILL D6.8)
+G21 (METRIC)
+G00 G17 G40 G49 G80 G90 (SAFETY LINE)
+(OP1 - FACE 1 MM OFF THE TOP)
+T1 M06 (FACE MILL D50)
+G00 G90 G54 X-30. Y10.
+S3200 M03
+G43 H01 Z25. M08
+Z2.
+G01 Z-1. F600.
+X150. F1300.
+Y45.
+X-30.
+Y80.
+X150.
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP2 - POCKET A: OUTLINE N100 DRAWN SQUARE, G68 TURNS IT 30 DEG CCW ABOUT ITS CENTRE)
+T2 M06 (END MILL D10)
+G00 G90 G54 X38. Y45.
+S9500 M03
+G43 H02 Z25. M08
+Z2.
+G68 X38. Y45. R30. (ROTATE ABOUT X38. Y45.)
+G150 X38. Y45. P100 J4. K0.2 G41 D02 Z-6. R0. Q3. F1400.
+G40 G01 X38. Y45.
+G69 (ROTATION OFF)
+G00 Z2.
+(OP3 - BORE B D24, G13 IN 3 PASSES OF 2 MM)
+X90. Y45.
+G01 Z-1. F400.
+G13 G91 Z-2. I7. K12. Q4. D02 L3 F1400.
+G90 G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP4 - SPOT DRILL 4 HOLES ON PCD 44, FIRST AT 45 DEG)
+T4 M06 (SPOT DRILL D10 90 DEG)
+G00 G90 G54 X90. Y45. (PATTERN CENTRE = BORE B)
+S6000 M03
+G43 H04 Z25. M08
+G81 G99 Z-3.5 R1. F500. L0
+G70 I22. J45. L4
+G80
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP5 - PECK DRILL DEPTH 10 = TIP Z-13.04)
+T5 M06 (TWIST DRILL D6.8 118 DEG)
+G00 G90 G54 X90. Y45.
+S4500 M03
+G43 H05 Z25. M08
+G83 G99 Z-13.04 R1. Q3. F600. L0
+G70 I22. J45. L4
+G80
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP6 - SLOT G 8 WIDE, X20.-X60. AT Y80., FLOOR Z-4., G150 OUTLINE N300 WITH THE D6)
+T3 M06 (END MILL D6)
+G00 G90 G54 X40. Y80.
+S10000 M03
+G43 H03 Z25. M08
+Z2.
+G150 X40. Y80. P300 J2. K0.2 G41 D03 Z-4. R0. Q2. F1000.
+G40 G01 X40. Y80.
+G00 Z25. M09
+M05
+G28 G91 Z0.
+G28 G91 Y0.
+M30
+N100 (POCKET A OUTLINE UNROTATED - 50 X 20 R6 ABOUT X38. Y45., CCW)
+G01 Y35.
+X57.
+G03 X63. Y41. R6.
+G01 Y49.
+G03 X57. Y55. R6.
+G01 X19.
+G03 X13. Y49. R6.
+G01 Y41.
+G03 X19. Y35. R6.
+G01 X38.
+M99
+N300 (SLOT G OUTLINE - START ON THE CENTRE LINE, CCW, R4 ENDS)
+G01 Y76.
+X60.
+G03 X60. Y84. R4.
+G01 X20.
+G03 X20. Y76. R4.
+G01 X40.
+M99
+%
+`;
+
+// ------------------------------------------------------------------------------------------ P09
+const P09 = `%
+O01009 (P09 SENSOR FLANGE)
+(DRG ML-1009 REV B - KESTREL INSTRUMENTS)
+(BLANK 100 X 100 X 26 STEEL 1045 - FINISHED 100 X 100 X 25)
+(G54 X0 Y0 = FRONT LEFT CORNER OF THE RAW BLANK, Z0 = TOP OF THE RAW BLANK)
+(SPIGOT D80 +-0.05 FLANGE FLOOR Z-7., BORE D32 +-0.05 FLOOR Z-13.)
+(4 HOLES ON PCD 56 AT 45 DEG DEPTH 16 = TIP Z-19.04 WITH COUNTERBORES D11 X 4 = FLOOR Z-5.)
+(4 CORNER HOLES ON THE FLANGE DEPTH 14 = TIP Z-17.04)
+(STEEL - REDUCED SPEEDS AND FEEDS, FLOOD COOLANT)
+(T1 FACE MILL D50 - T2 END MILL D10 - T3 END MILL D6 - T4 SPOT DRILL D10 - T5 DRILL D6.8)
+G21 (METRIC)
+G00 G17 G40 G49 G80 G90 (SAFETY LINE)
+(OP1 - FACE 1 MM OFF THE TOP IN TWO CUTS OF 0.5)
+T1 M06 (FACE MILL D50)
+G00 G90 G54 X-30. Y10.
+S1000 M03
+G43 H01 Z25. M08
+Z2.
+G01 Z-0.5 F200.
+X130. F400.
+Y50.
+X-30.
+Y90.
+X130.
+G00 Z2.
+X-30. Y10.
+G01 Z-1. F200.
+X130. F400.
+Y50.
+X-30.
+Y90.
+X130.
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP2 - SPIGOT D80: 3 LEVELS OF 2 MM IN SUBPROGRAM N100)
+T2 M06 (END MILL D10)
+G00 G90 G54 X-13. Y50. (OUTSIDE THE LEFT EDGE ON THE SPIGOT CENTRE LINE)
+S3800 M03
+G43 H02 Z25. M08
+Z2.
+G01 Z-1. F150.
+M97 P100 L3 (Z-3., Z-5., Z-7.)
+G00 Z25.
+(OP3 - BORE D32 X 12 DEEP, G13 IN 6 PASSES OF 2 MM)
+X50. Y50.
+Z2.
+G01 Z-1. F150.
+G13 G91 Z-2. I8. K16. Q4. D02 L6 F500.
+G90 G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP4 - SPOT DRILL - PCD HOLES FROM THE TOP, CORNER HOLES FROM THE FLANGE)
+(G98 RETURNS TO Z25. SO THE TOOL NEVER CROSSES THE SPIGOT AT FLANGE HEIGHT)
+T4 M06 (SPOT DRILL D10 90 DEG)
+G00 G90 G54 X50. Y50.
+S2400 M03
+G43 H04 Z25. M08
+G81 G98 Z-3.5 R1. F240. L0 (ARMED AT THE BORE CENTRE, NO HOLE HERE)
+G70 I28. J45. L4 (C D E F ON PCD 56)
+X8. Y8. Z-9.5 R-6. (G - CORNER HOLES ON THE FLANGE, NEW Z AND R)
+X92. (H)
+Y92. (J)
+X8. (I)
+G80
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP5 - PECK DRILL - PCD HOLES TIP Z-19.04, CORNER HOLES TIP Z-17.04, 2 MM PECKS IN STEEL)
+T5 M06 (TWIST DRILL D6.8 118 DEG)
+G00 G90 G54 X50. Y50.
+S1400 M03
+G43 H05 Z25. M08
+G83 G98 Z-19.04 R1. Q2. F150. L0
+G70 I28. J45. L4
+X8. Y8. Z-17.04 R-6. (G)
+X92. (H)
+Y92. (J)
+X8. (I)
+G80
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP6 - COUNTERBORES D11 X 4 ON THE PCD HOLES, G13 IN SUBPROGRAM N400)
+T3 M06 (END MILL D6)
+G00 G90 G54 X69.799 Y69.799
+S6000 M03
+G43 H03 Z25. M08
+M97 P400 (C - 45 DEG)
+G00 X30.201 Y69.799
+M97 P400 (D - 135 DEG)
+G00 X30.201 Y30.201
+M97 P400 (E - 225 DEG)
+G00 X69.799 Y30.201
+M97 P400 (F - 315 DEG)
+G00 Z25. M09
+M05
+G28 G91 Z0.
+G28 G91 Y0.
+M30
+N100 (SPIGOT - ONE 2 MM LEVEL, STARTS AND ENDS AT X-13. Y50.)
+G91 G01 Z-2. F150.
+G90 X3. F600. (SQUARE LAP - TOOL CENTRE 3 IN FROM THE EDGES CLEARS THE CORNERS)
+Y97.
+X97.
+Y3.
+X3.
+Y50.
+X-13.
+G02 X-13. Y50. I63. J0. (CLEARING CIRCLE R63)
+G01 X-4.
+G02 X-4. Y50. I54. J0. (CLEARING CIRCLE R54)
+G41 D02 G01 X10. (FINISH THE D80 SPIGOT - CW WITH G41 = CLIMB)
+G02 X10. Y50. I40. J0.
+G40 G01 X-13.
+M99
+N400 (COUNTERBORE D11 AT THE CURRENT X Y - 4 PASSES OF 1 MM TO Z-5.)
+G00 Z1.
+G01 Z-1. F120.
+G13 G91 Z-1. I4. K5.5 Q1.5 D03 L4 F400.
+G90 G00 Z1.
+M99
+%
+`;
+
+// ------------------------------------------------------------------------------------------ P10
+const P10 = `%
+O01010 (P10 GEARBOX BRACKET)
+(DRG ML-1010 REV A - OSTRANDER MOTION)
+(BLANK 130 X 80 X 31 BRASS - FINISHED 130 X 80 X 30)
+(G54 X0 Y0 = FRONT LEFT CORNER OF THE RAW BLANK, Z0 = TOP OF THE RAW BLANK)
+(RIGHT SHOULDER X105.-X130. FLOOR Z-9., POCKET B 50 X 36 R8 +-0.05 FLOOR Z-11.)
+(SLOT C ON THE SHOULDER FLOOR Z-13., HOLES D E F DEPTH 20 FROM THE TOP = TIP Z-23.04)
+(BORE G D16 FLOOR Z-7.)
+(T1 FACE MILL D50 - T2 END MILL D10 - T3 END MILL D6 - T4 SPOT DRILL D10 - T5 DRILL D6.8)
+G21 (METRIC)
+G00 G17 G40 G49 G80 G90 (SAFETY LINE)
+(OP1 - FACE 1 MM OFF THE TOP)
+T1 M06 (FACE MILL D50)
+G00 G90 G54 X-30. Y10.
+S2200 M03
+G43 H01 Z25. M08
+Z2.
+G01 Z-1. F450.
+X160. F900.
+Y40.
+X-30.
+Y70.
+X160.
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP2 - RIGHT SHOULDER 25 WIDE X 8 DEEP: 4 LEVELS OF 2 IN SUBPROGRAM N100, THEN A G41 WALL PASS)
+T2 M06 (END MILL D10)
+G00 G90 G54 X126. Y-8. (OUTSIDE THE FRONT OF THE BLANK)
+S7000 M03
+G43 H02 Z25. M08
+Z2.
+G01 Z-1. F300.
+M97 P100 L4 (Z-3., Z-5., Z-7., Z-9.)
+X138. F900. (AROUND THE OUTSIDE TO THE BACK)
+Y93.
+X118.
+G41 D02 X105. Y85. (WALL X105. - CLIMB, TOOL ON THE LEFT GOING -Y)
+Y-5.
+G40 X118. Y-8.
+G00 Z2.
+(OP3 - POCKET B, G150 OUTLINE N200, 4 LEVELS FROM R0.)
+X40. Y40.
+G150 X40. Y40. P200 J4. K0.2 G41 D02 Z-11. R0. Q2.75 F900.
+G40 G01 X40. Y40.
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP4 - SPOT DRILL - D E FROM THE TOP, F FROM THE POCKET FLOOR)
+T4 M06 (SPOT DRILL D10 90 DEG)
+G00 G90 G54 X80. Y15.
+S4000 M03
+G43 H04 Z25. M08
+G81 G98 Z-3.5 R1. F300. (D)
+Y65. (E)
+X40. Y40. Z-13.5 R-10. (F - R 1 MM ABOVE THE POCKET FLOOR Z-11.)
+G80
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP5 - PECK DRILL DEPTH 20 FROM THE TOP = TIP Z-23.04)
+T5 M06 (TWIST DRILL D6.8 118 DEG)
+G00 G90 G54 X80. Y15.
+S3500 M03
+G43 H05 Z25. M08
+G83 G98 Z-23.04 R1. Q3. F350. (D)
+Y65. (E)
+X40. Y40. R-10. (F)
+G80
+G00 Z25. M09
+M05
+G28 G91 Z0.
+(OP6 - BORE G D16 X 6, G13 IN 3 PASSES OF 2, THEN SLOT C ON THE SHOULDER WITH G150)
+T3 M06 (END MILL D6)
+G00 G90 G54 X80. Y40.
+S9000 M03
+G43 H03 Z25. M08
+Z2.
+G01 Z-1. F200.
+G13 G91 Z-2. I4. K8. Q2.5 D03 L3 F700.
+G90 G00 Z2.
+X117.5 Y40.
+(SLOT C 8 WIDE, Y15.-Y65. AT X117.5, R-8. = 1 ABOVE THE SHOULDER, I2. = STROKES ALONG Y)
+G150 X117.5 Y40. P300 I2. K0.2 G41 D03 Z-13. R-8. Q2.5 F700.
+G40 G01 X117.5 Y40.
+G00 Z25. M09
+M05
+G28 G91 Z0.
+G28 G91 Y0.
+M30
+N100 (SHOULDER - ONE LEVEL: 2 DOWN, STROKES AT X126. X118. X110.2, BACK TO X126. Y-8.)
+G91 G01 Z-2. F300.
+G90 Y88. F900.
+X118.
+Y-8.
+X110.2 (LEAVES 0.2 ON THE WALL)
+Y88.
+X138.
+Y-8.
+X126.
+M99
+N200 (POCKET B OUTLINE - START X40. Y40., CCW)
+G01 Y22.
+X57.
+G03 X65. Y30. R8.
+G01 Y50.
+G03 X57. Y58. R8.
+G01 X23.
+G03 X15. Y50. R8.
+G01 Y30.
+G03 X23. Y22. R8.
+G01 X40.
+M99
+N300 (SLOT C OUTLINE - START ON THE CENTRE LINE, CCW, R4 ENDS)
+G01 X121.5
+Y65.
+G03 X113.5 Y65. R4.
+G01 Y15.
+G03 X121.5 Y15. R4.
+G01 Y40.
+M99
+%
+`;
+
+// ------------------------------------------------------------------------------------------ T01
+// The tutorial part, step by step. VPS templates and field ids are those of src/ui/haas/haas-vps.js
+// (VPS_TEMPLATES: 'face', 'rpocket', 'cpocket', 'drill'); `fields` holds the values to enter there.
+// The hand-written `blocks` are the reference; the VPS generator writes equivalent explicit moves
+// (its rectangular pocket has corner radius = tool radius R5, see `vps.note` on the pocket step).
+// The VPS route for T01 is checked in tests/haas-parts.test.mjs as well (grade A).
+const TOOL = {
+  1: { T: 1, H: 1, D: 1, name: 'FACE MILL D50' },
+  2: { T: 2, H: 2, D: 2, name: 'END MILL D10' },
+  5: { T: 5, H: 5, D: 5, name: 'TWIST DRILL D6.8 118 DEG' },
+};
+const W = (word, why) => ({ word, why });
+
+export const HAAS_TUTORIAL_STEPS = [
+  {
+    id: 'face', title: 'Face the top', features: [], tool: TOOL[1],
+    intro: 'The sawn blank is 16 thick and the drawing wants 15: the face mill takes 1 mm off the top in two zig-zag passes along X, starting and ending outside the blank.',
+    blocks: [
+      '(OP1 - FACE 1 MM OFF THE TOP, TWO PASSES ALONG X)',
+      'T1 M06 (FACE MILL D50)',
+      'G00 G90 G54 X-30. Y10.',
+      'S3200 M03',
+      'G43 H01 Z25. M08',
+      'Z2.',
+      'G01 Z-1. F600.',
+      'X110. F1300.',
+      'Y40.',
+      'X-30.',
+      'G00 Z25. M09',
+      'M05',
+      'G28 G91 Z0.',
+    ],
+    explain: [
+      W('T1 M06', 'Tool change: put the D50 face mill (pocket 1) in the spindle.'),
+      W('G00 G90 G54 X-30. Y10.', 'Rapid, absolute, work offset G54 (front-left corner of the raw blank). X-30. puts the D50 cutter 5 mm clear of the left end.'),
+      W('S3200 M03', '3200 rpm clockwise for the face mill in aluminium.'),
+      W('G43 H01 Z25.', 'Switch on tool length offset H01 (T1) and come down to Z25. above the blank. M08 = coolant on.'),
+      W('G01 Z-1. F600.', 'Feed down to Z-1. outside the blank: blank 16, drawing 15, so 1 mm comes off. Decimal point: Z-1 without it would be -0.001 mm!'),
+      W('X110. F1300.', 'First pass at Y10. (the cutter covers Y-15 to Y35) to 5 mm past the right end, 1300 mm/min.'),
+      W('Y40. / X-30.', 'Step over 30 mm and come back: the second pass covers Y15 to Y65, past the back edge Y50.'),
+      W('G28 G91 Z0.', 'Send Z straight home (incremental zero move to the reference point) before the next tool change.'),
+    ],
+    vps: {
+      template: 'face',
+      fields: { WORK_OFFSET: 54, T: 1, S: 3200, F: 1300, M8: 1, X: 0, Y: 0, L: 80, W: 50, D: 0, Q: 70, Z: -1, K: 1, R: 2 },
+    },
+  },
+  {
+    id: 'pocket', title: 'Mill pocket A', features: ['A'], tool: TOOL[2],
+    intro: 'Pocket A is 40 x 24 with R6 corners, 4 deep from the faced top. G150 roughs it in zig-zag strokes from the centre and finishes the wall with cutter compensation; the outline is a little subprogram N100 after the M30.',
+    blocks: [
+      '(OP2 - POCKET A 40 X 24 R6 DEPTH 4 = FLOOR Z-5., G150 WITH OUTLINE N100)',
+      'T2 M06 (END MILL D10)',
+      'G00 G90 G54 X40. Y25.',
+      'S9500 M03',
+      'G43 H02 Z25. M08',
+      'Z2.',
+      'G150 X40. Y25. P100 J4. K0.2 G41 D02 Z-5. R0. Q2.5 F1400.',
+      'G40 G01 X40. Y25.',
+      'G00 Z25. M09',
+      'M05',
+      'G28 G91 Z0.',
+    ],
+    subprogram: [
+      'N100 (POCKET A OUTLINE - START X40. Y25. TO THE EDGE, CCW, BACK TO THE EDGE POINT)',
+      'G01 Y13.',
+      'X54.',
+      'G03 X60. Y19. R6.',
+      'G01 Y31.',
+      'G03 X54. Y37. R6.',
+      'G01 X26.',
+      'G03 X20. Y31. R6.',
+      'G01 Y19.',
+      'G03 X26. Y13. R6.',
+      'G01 X40.',
+      'M99',
+    ],
+    explain: [
+      W('X40. Y25.', 'Start point = pocket centre (40 from the left, 25 from the front); the centre-cutting D10 plunges here.'),
+      W('P100', 'The pocket outline is the local subprogram N100 after M30: first move from the start point to the edge, then the closed outline CCW, back to that edge point.'),
+      W('J4.', 'Roughing step-over 4 mm in Y, strokes along X.'),
+      W('K0.2', 'Roughing stays 0.2 inside the wall; a finish lap at full depth cuts the wall to size (the pocket is +-0.05).'),
+      W('G41 D02', 'Climb milling with the radius of D02 (R5). R6 corners are bigger than the cutter radius, good.'),
+      W('Z-5.', 'Pocket depth 4 below the faced top at Z-1.: -1. - 4. = -5.'),
+      W('R0. Q2.5', 'R plane Z0. (1 mm above the faced top); Q is measured from R: levels Z-2.5 and Z-5.'),
+      W('F1400.', '1400 mm/min for the D10 end mill in aluminium.'),
+    ],
+    vps: {
+      template: 'rpocket',
+      fields: { WORK_OFFSET: 54, T: 2, S: 9500, F: 1400, M8: 1, X: 40, Y: 25, I: 40, J: 24, D: 0, Q: 50, Z: -5, K: 2.5, R: 2 },
+      note: 'The VPS rectangular pocket has corner radius = tool radius (R5, drawing R6) and no finish allowance; G150 with K0.2 cuts the drawing corners and finishes the wall.',
+    },
+  },
+  {
+    id: 'drill', title: 'Drill holes B and C', features: ['B', 'C'], tool: TOOL[5],
+    intro: 'Holes B and C are D6.8, 8 deep. G81 is a modal canned cycle: it drills on its own line and at every X/Y position after it until G80 cancels it.',
+    blocks: [
+      '(OP3 - DRILL B AND C D6.8, DEPTH 8 + 2.04 DRILL POINT = TIP Z-11.04)',
+      'T5 M06 (TWIST DRILL D6.8 118 DEG)',
+      'G00 G90 G54 X10. Y10.',
+      'S4500 M03',
+      'G43 H05 Z25. M08',
+      'G81 G99 Z-11.04 R1. F600. (HOLE B)',
+      'X70. Y40. (HOLE C)',
+      'G80',
+      'G00 Z25. M09',
+      'M05',
+      'G28 G91 Z0.',
+    ],
+    explain: [
+      W('G81', 'Drilling cycle: rapid to R, feed to Z, rapid out.'),
+      W('G99', 'Return to the R plane between holes (G98 would go back to the start height Z25.).'),
+      W('Z-11.04', 'Depth 8 is to the full D6.8, measured from the faced top Z-1.; the 118 deg point adds 2.04: -1. - 8. - 2.04 = -11.04.'),
+      W('R1.', 'R plane 2 mm above the faced top: rapid down to here, then feed.'),
+      W('F600.', 'Drilling feed 600 mm/min at 4500 rpm.'),
+      W('X70. Y40.', 'A new position with the cycle active drills hole C.'),
+      W('G80', 'Cancel the canned cycle before any other move.'),
+    ],
+    vps: {
+      template: 'drill',
+      // B (10,10) and C (70,40) lie on a circle about the pocket centre X40. Y25.: radius 33.541, start 206.565 deg, 2 holes.
+      fields: { WORK_OFFSET: 54, A: 0, B: -3.5, T: 5, S: 4500, F: 600, C: 0, Z: -11.04, Q: 3, R: 1, M: 2, X: 40, Y: 25, I: 33.541, J: 206.565, L: 2, K: 1, M8: 1 },
+    },
+  },
+];
+
+export const T01_HEADER = [
+  '%',
+  'O00001 (T01 FIRST PART)',
+  '(DRG ML-0001 REV A - MILLLAB TRAINING)',
+  '(BLANK 80 X 50 X 16 ALUMINIUM - FINISHED 80 X 50 X 15)',
+  '(G54 X0 Y0 = FRONT LEFT CORNER OF THE RAW BLANK, Z0 = TOP OF THE RAW BLANK)',
+  '(FINISHED TOP AT Z-1. - FEATURE FLOOR = -1. MINUS THE DRAWING DEPTH)',
+  '(T1 FACE MILL D50 - T2 END MILL D10 - T5 DRILL D6.8)',
+  'G21 (METRIC)',
+  'G00 G17 G40 G49 G80 G90 (SAFETY LINE)',
+];
+export const T01_END = ['G28 G91 Y0. (TABLE FORWARD FOR UNLOADING)', 'M30'];
+
+// Full Haas program assembled from the steps: header, every step's blocks, end, then the subprograms.
+export function haasTutorialProgramFromSteps(steps = HAAS_TUTORIAL_STEPS) {
+  const lines = [...T01_HEADER];
+  for (const s of steps) lines.push(...s.blocks);
+  lines.push(...T01_END);
+  for (const s of steps) if (s.subprogram) lines.push(...s.subprogram);
+  lines.push('%');
+  return lines.join('\n') + '\n';
+}
+
+export const HAAS_SOLUTIONS = { P01, P02, P03, P04, P05, P06, P07, P08, P09, P10, T01: haasTutorialProgramFromSteps() };
+
+export function haasSolution(partId) {
+  return HAAS_SOLUTIONS[partId] ?? null;
+}

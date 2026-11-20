@@ -10,6 +10,7 @@ import { findCall, formatCall } from '../ui/cycleforms.js';
 import { DRILL_POINT_K } from './parts.js';
 import { MATERIALS } from '../config.js';
 import { MARK_RE } from './tutorial-template.js';
+import { haasSteps, fillHaas } from './tutorial-haas.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -116,9 +117,12 @@ export class Tutorial {
     this.min = false;
     this.t = 0;
     this.checkT = 0;
+    this.lookAcc = 0; // radians the player has looked around since the tutorial started
+    this._look = null;
     this.marker = buildMarker();
     this._v = new THREE.Vector3();
     this._w = new THREE.Vector3();
+    this.ctl = this.ctlNow();
     this.steps = this.buildSteps();
     this.buildDom();
   }
@@ -161,6 +165,14 @@ export class Tutorial {
       ['bench', () => this.onPlate()],
     ];
     return ms.some(([id, fn]) => order.indexOf(id) > i && fn());
+  }
+
+  // the program editor is on screen, on whichever control style is active (808D: PROGRAM area;
+  // NGC-style: EDIT mode / edit display)
+  programView() {
+    const h = this.app.haas;
+    if (h?.active) return h.mode === 'EDIT' || h.disp === 'edit';
+    return this.hmi?.area === 'program';
   }
 
   // ---------------------------------------------------------------- program helpers
@@ -243,6 +255,7 @@ export class Tutorial {
     if (app.programName !== name && !this.refLoaded()) app.openProgram(name);
   }
   fill(op) {
+    if (this.ctl === 'haas') return fillHaas(this, op);
     const s = this.step(op);
     if (!s) return;
     const hmi = this.hmi, ed = this.app.ui.editor;
@@ -391,19 +404,14 @@ export class Tutorial {
       },
     });
 
-    return [
+    const all = [
       { id: 'welcome', phase: 'Start', title: 'Your first part', explain: true,
         text: () => `This tutorial takes you through a whole job: you pick drawing <b>${esc(P.drawingNo)}</b> from the job board and turn a sawn blank into a finished, inspected part on the real control. Each step continues by itself once you have done it; use <b>Skip step</b> if you already know it.` },
       { id: 'look', phase: 'Shop floor', title: 'Look around',
         text: () => (touch() ? 'Drag with your <b>right thumb</b> on the right half of the screen to look around.' : '<b>Click the 3D view</b> to capture the mouse, then move the mouse to look around. <b>Esc</b> gives the mouse back.'),
-        enter: () => { this.look0 = { yaw: g.fp.yaw, pitch: g.fp.pitch, acc: 0 }; },
-        tick: () => {
-          const l = this.look0;
-          if (!l) return;
-          l.acc += Math.abs(Math.atan2(Math.sin(g.fp.yaw - l.yaw), Math.cos(g.fp.yaw - l.yaw))) + Math.abs(g.fp.pitch - l.pitch);
-          l.yaw = g.fp.yaw; l.pitch = g.fp.pitch;
-        },
-        done: () => (this.look0?.acc || 0) > 0.9 },
+        // looking around is accumulated every frame since the tutorial started (update()), so looking
+        // while the welcome card was up counts too; walking on / opening the board also passes it
+        done: () => this.lookAcc > 0.9 || near(boardStand, 1500) || modal('jobs') || modal('drawing') || this.jobOn() },
       { id: 'walk', phase: 'Shop floor', title: 'Walk to the job board',
         text: () => (touch() ? 'Use your <b>left thumb</b> as a joystick to walk to the cork board marked with the yellow arrow.' : 'Walk with <b>W A S D</b> (hold <b>Shift</b> to run) to the cork board marked with the yellow arrow.'),
         target: () => W(new THREE.Vector3(board.x + 60, board.y + 700, board.z), boardStand, { text: 'Job board' }),
@@ -513,7 +521,7 @@ export class Tutorial {
         text: () => `Open the <b>PROGRAM</b> area. JOB_${esc(P.id)}.MPF is prepared: tool changes and moves are there, the cycles go below the lines marked <b>&gt;&gt;&gt;</b>.`,
         enter: () => this.ensureProgram(),
         target: () => (opOn() ? this.hmiTarget('program', () => null) : null),
-        done: () => (this.hmi.area === 'program' && opOn()) || this.progDone('face') && this.progDone('pocket') && this.progDone('drill') },
+        done: () => (this.programView() && opOn()) || this.progDone('face') && this.progDone('pocket') && this.progDone('drill') },
       progStep('face', 'Face the top: CYCLE71', () => this.progText('face')),
       progStep('pocket', 'Mill the pocket: POCKET3', () => this.progText('pocket')),
       progStep('drill', 'Drill the holes: MCALL CYCLE81', () => this.progText('drill')),
@@ -529,12 +537,13 @@ export class Tutorial {
       { id: 'safety', atPanel: true, phase: 'Run', title: 'Run it safely', explain: true,
         text: () => 'On a real machine you would first run with <b>SBL</b> (single block: one line per CYCLE START) and the <b>feed override</b> turned down, ready on CYCLE STOP. Here a crash only costs a fresh blank, so you can try it.',
         target: () => (opOn() ? { el: $('#knobFeed'), text: 'Feed override', pad: 6 } : null),
-        done: () => ack('safety') || app.controller.exec?.kind === 'program' || this.passed('safety') },
+        done: () => ack('safety') || app.controller.exec?.kind === 'program' || app.controller.pendingStart === 'start' || this.passed('safety') },
       { id: 'cycleStart', atPanel: true, phase: 'Run', title: 'CYCLE START',
         text: () => 'Press <b>CYCLE START</b>. Push the <b>Simulation speed</b> slider to the right to watch it go faster.',
         target: () => (opOn() ? { el: $('.key.cstart'), text: 'CYCLE START' } : null),
         extra: () => (app.controller.state === 'alarm' ? `<div class="t-warn">Alarm: ${esc(app.controller.alarm || '')}. Press <b>RESET</b>, fix the program (or <b>Fill for me</b> on the program steps) and start again.</div>` : ''),
-        done: () => app.controller.exec?.kind === 'program' || this.machined() },
+        // pressed: the program runs, or waits for the interlocked doors to finish closing
+        done: () => app.controller.exec?.kind === 'program' || app.controller.pendingStart === 'start' || this.machined() },
       { id: 'watch', phase: 'Run', title: 'Watch it cut',
         text: () => 'The face mill, the end mill and the drill take turns. The tool path is drawn, chips fly and the screen shows the current block. Wait for <b>Program complete</b>.',
         target: () => (opOn() && app.controller.exec ? { el: $('#simSpeed'), text: 'Simulation speed', pad: 8 } : null),
@@ -593,6 +602,35 @@ export class Tutorial {
         text: () => `You read a drawing, chose the blank, set up the machine, programmed three cycles, machined and inspected the part. Pick your next job at the <b>job board</b> (P01 is a good start). Restart this tutorial any time from <b>Help</b> or with <b>T</b>.`,
         done: () => ack('finish') },
     ];
+    return this.ctl === 'haas' ? this.haasify(all) : all;
+  }
+
+  // ---------------------------------------------------------------- control style
+  ctlNow() { return this.app.haas?.active ? 'haas' : '808d'; }
+  // the player switched the control style (Settings): rebuild the steps and stay on the same one, or
+  // on the start of the control part when the step does not exist on the other control
+  switchControl() {
+    const id = this.cur.id;
+    this.cur.leave?.();
+    this.ctl = this.ctlNow();
+    this.steps = this.buildSteps();
+    let i = this.steps.findIndex((x) => x.id === id);
+    if (i < 0) i = Math.max(0, this.steps.findIndex((x) => x.id === 'pendant') + 1);
+    this.idx = i;
+    this.hold = false;
+    this.game.s.tut.step = this.cur.id;
+    this.cur.enter?.();
+    this.render(true);
+  }
+  // the control steps of the NGC-style (Haas) control replace the 808D ones (tutorial-haas.js)
+  haasify(all) {
+    const { control, run } = haasSteps(this);
+    const ix = (id) => all.findIndex((s) => s.id === id);
+    const a = ix('areas'), b = ix('prog-drill'), c = ix('closeDoors'), d = ix('watch');
+    const out = [...all.slice(0, a), ...control, ...all.slice(b + 1, c), ...run, ...all.slice(d + 1)];
+    const p = out.find((s) => s.id === 'pendant');
+    p.text = () => 'Use the <b>control panel</b> (the pendant hanging on the right of the doors). The NGC-style CNC control opens: screen at the top, the keyboard below it, the handle wheel and CYCLE START on the left, your drawing on the left of the view.';
+    return out;
   }
 
   // ---------------------------------------------------------------- DOM
@@ -644,6 +682,8 @@ export class Tutorial {
     const s = this.game.s;
     s.tut = { ...(s.tut || {}), active: true, ack: s.tut?.ack || {}, offered: true };
     this.active = true;
+    this.lookAcc = 0;
+    this._look = null;
     let i = stepId ? this.steps.findIndex((x) => x.id === stepId) : 0;
     if (i < 0) i = 0;
     this.app.viewer.scene.add(this.marker);
@@ -690,8 +730,14 @@ export class Tutorial {
     this.clearSheet();
     this._sheetKey = '';
     s.enter?.();
+    // Back (hold) shows a step again without bouncing forward at once: remember whether it was
+    // already done, so that it still continues by itself once the player does it again (advance()).
+    this.holdDone = this.hold && this.safeDone(s);
     this.render(true);
-    this.checkT = 0.3; // let the new step settle before checking
+    // a step whose condition already holds when it is entered goes on right away
+    // (initial: start() / restart() decide first whether the welcome card holds)
+    if (!initial) this.advance();
+    this.checkT = 0.1;
   }
 
   next() {
@@ -707,7 +753,15 @@ export class Tutorial {
 
   // advance while the current step is done (skips ahead when the player is ahead of the tutorial)
   advance() {
-    if (this.hold) return;
+    if (this.hold) {
+      // held by Back: an action step that the player now completes (again) continues by itself
+      const s = this.cur;
+      if (s.explain) return;
+      const d = this.safeDone(s);
+      if (!d) { this.holdDone = false; return; }
+      if (this.holdDone) return;
+      this.hold = false;
+    }
     let moved = false, guard = 0;
     while (guard++ < this.steps.length) {
       const s = this.cur;
@@ -727,7 +781,7 @@ export class Tutorial {
       this._sheetKey = '';
       this.app.sound.tone?.(880, 0.005, 0.12, 0.05, 'sine', 220);
       this.render(true);
-      this.checkT = 0.3;
+      this.checkT = 0.1;
     }
   }
 
@@ -762,11 +816,17 @@ export class Tutorial {
   update(dt) {
     if (!this.active) return;
     this.t += dt;
+    if (this.ctl !== this.ctlNow()) this.switchControl();
     const s = this.cur;
+    // looking around (any step; the 'look' step reads it)
+    const fp = this.game.fp, l = this._look;
+    if (l) this.lookAcc += Math.abs(Math.atan2(Math.sin(fp.yaw - l.yaw), Math.cos(fp.yaw - l.yaw))) + Math.abs(fp.pitch - l.pitch);
+    this._look = { yaw: fp.yaw, pitch: fp.pitch };
     s.tick?.(dt);
+    // the step conditions are checked ~10x per second of game time, every frame at low frame rates
     this.checkT -= dt;
     if (this.checkT <= 0) {
-      this.checkT = 0.15;
+      this.checkT = 0.1;
       this.advance();
       this.render();
     }
@@ -802,6 +862,11 @@ export class Tutorial {
     const el = tgt?.el;
     let rect = null;
     if (el && el.isConnected) {
+      // a form field scrolled out of its (scrolling) form: bring it into view once
+      if ((el.tagName === 'INPUT' || el.tagName === 'SELECT') && this._scrolledTo !== el) {
+        this._scrolledTo = el;
+        try { el.scrollIntoView({ block: 'nearest' }); } catch { /* ignore */ }
+      }
       const r = el.getBoundingClientRect();
       if (r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth && getComputedStyle(el).visibility !== 'hidden' && this.uncovered(el, r)) rect = r;
     }

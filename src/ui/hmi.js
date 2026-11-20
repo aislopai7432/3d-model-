@@ -365,7 +365,7 @@ export class HMI {
         <td><input data-f="flutes" type="number" step="1" min="1" max="12" value="${t.flutes}" style="min-width:40px"></td>
         <td>${angle ? `<input data-f="tipAngle" type="number" step="1" value="${t.tipAngle || 118}">` : rc ? `<input data-f="cornerRadius" type="number" step="0.1" value="${t.cornerRadius || 0}">` : '—'}</td></tr>`;
     }).join('');
-    el.innerHTML = `<div class="hp"><div class="hbox"><div class="hbox-h">Tool list <span class="r">${app.tools.length} tools · magazine 16 pockets · T = pocket</span></div>
+    el.innerHTML = `<div class="hp"><div class="hbox"><div class="hbox-h">Tool list <span class="r">${app.tools.length} tools · magazine ${MACHINE.atcPockets} pockets · T = pocket</span></div>
       <div class="htable-wrap"><table class="htable ${locked ? 'locked' : ''}"><thead><tr><th>T</th><th>Type</th><th>D</th><th>Length</th><th>Radius</th><th>Flute L</th><th>Teeth</th><th>Angle / R</th></tr></thead><tbody>${rows}</tbody></table></div></div>
       <div class="hbox" id="toolDetail"></div></div>`;
     for (const tr of $$('tbody tr', el)) {
@@ -732,6 +732,7 @@ export class HMI {
   page_settings(el) {
     const s = this.app.settings;
     el.innerHTML = `<div class="hp"><div class="hbox"><div class="hbox-h">Control</div><div class="hbox-b fgrid">
+      <label>Control style<select data-s="control"><option value="haas" ${s.control !== '808d' ? 'selected' : ''}>NGC-style (pendant keyboard)</option><option value="808d" ${s.control === '808d' ? 'selected' : ''}>808D-style</option></select></label>
       <label>Default program dialect<select data-s="dialect"><option value="siemens" ${s.dialect === 'siemens' ? 'selected' : ''}>Siemens mode (G290)</option><option value="iso" ${s.dialect === 'iso' ? 'selected' : ''}>ISO dialect (G291)</option></select></label>
       <label class="chk"><input type="checkbox" data-c="requireG43" ${s.requireG43 ? 'checked' : ''}> ISO: require G43 H_ for tool length</label>
       <label class="chk"><input type="checkbox" data-c="doorInterlock" ${s.doorInterlock ? 'checked' : ''}> Door interlock</label>
@@ -783,7 +784,7 @@ export class HMI {
 
   page_version(el) {
     el.innerHTML = `<div class="hp"><div class="hbox"><div class="hbox-h">Version</div><div class="hbox-b kvl">
-      <span>Simulator</span><b>MillLab VMC-560 with an 808D-style control</b><span>Machine</span><b>3-axis VMC, X 560 / Y 410 / Z 410 mm, 12 000 rpm, 16-pocket umbrella changer</b>
+      <span>Simulator</span><b>MillLab mini mill with an 808D-style control</b><span>Machine</span><b>3-axis mini mill, X 406 / Y 356 / Z 381 mm, 12 000 rpm, 10-pocket umbrella changer</b>
       <span>Languages</span><b>Siemens mode (G290) and ISO dialect (G291)</b><span>Material removal</span><b>Z-map (dexel heightfield), exact for 3-axis vertical cutters</b>
       <span>Rendering</span><b>Three.js 0.160 (WebGL 2)</b></div>
       <div class="hbox-b hnote">MillLab is an independent training simulator. Its operating concept follows the SINUMERIK 808D (operating areas, softkeys, cycles and Siemens-mode programming) for learning purposes; it is not Siemens software and is not affiliated with or endorsed by Siemens AG. SINUMERIK is a trademark of Siemens AG. Cycle parameters follow the documented standard-cycle signatures as closely as possible; check the official manuals before running programs on a real machine.</div></div></div>`;

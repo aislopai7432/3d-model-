@@ -94,7 +94,35 @@ Headless tests cover the interpreters, cycles, cutter compensation, Z-map accura
 node tests/run.mjs
 ```
 
-## The control
+## The NGC-style control (default)
+
+Two controls drive the same machine. The default is an NGC-style control modelled on the Haas Mini Mill pendant: the screen sits on top, the keyboard below, and power, E-STOP, the jog handle, CYCLE START and FEED HOLD run down the left side. The 808D-style control described in the next section is still available. Switch between them with SETTING › Simulator › Control Style on the NGC-style control, or SYSTEM › Settings › Control style on the 808D-style control. MillLab is not affiliated with Haas Automation, and the control carries no Haas logos or artwork.
+
+- **Keyboard.** All eight key groups are laid out as in the operator's manual figure: FUNCTION, DISPLAY, CURSOR, MODES, JOG, OVERRIDES, ALPHA and NUMERIC. The side panel has the MEMORY LOCK and SETUP MODE key switches, SECOND HOME and the work light. The beacon sits on top of the pendant. Option keys that this machine lacks (P-Cool, TSC, auto door, the A, B and C axes) show the control's "not installed" message.
+- **Screen.** The screen has these parts:
+  - a status bar showing the mode (for example *Setup: JOG*, *Operation: MEM* or *Edit: MDI*) and the time;
+  - the active program or MDI pane;
+  - the tabbed main display;
+  - spindle, positions (with load bars) and timers panes;
+  - the icon bar;
+  - the green INPUT bar, the system status and the alarm status.
+- **Modes and procedures.**
+  - Start up with RESET (clears 102 SERVOS OFF), then POWER UP (Z first).
+  - HANDLE JOG: drag or scroll the handle. Increments are .0001 to .1 in, or .001 to 1 mm.
+  - OFFSET: TOOL OFFSET MEASURE and PART ZERO SET, with F1 to set a value and ENTER to add to it. F3 runs the simulated probing actions.
+  - MDI: type a block, then INSERT, then CYCLE START.
+  - LIST PROGRAM: the Memory and USB devices, with SELECT PROGRAM, INSERT (new), ALTER (edit) and ERASE PROGRAM.
+  - MEMORY: single block, option stop and block delete.
+  - EDIT: INSERT, ALTER, DELETE and UNDO through the input line, F2 block select and the F1 menu.
+  - GRAPHICS: a simulation run without machine motion.
+  - Alarms: E-STOP raises 107. Release the button, then press RESET twice.
+- **Door rules.** RUN mode (key switch locked) needs the door closed to run, and the door stays locked while the machine runs. SETUP mode allows jogging with the door open, limits rapids to 25 % and the spindle to Setting 292, and runs only while CYCLE START is held.
+- **VPS templates.** EDIT › VPS offers Face Milling, Rectangular Pocket, Circular Pocket (G13) and Drilling (single hole, G70 bolt circle or grid). Each template has a variables table and an illustration. F4 writes the generated Haas G-code into the active program, the MDI program or a new O-number program. CYCLE START runs it in MDI.
+- **Physical keyboard.** Letters and numbers type on the input line. Enter = ENTER, Backspace = CANCEL, the arrows, PgUp, PgDn, Home and End = cursor, Insert and Delete = INSERT and DELETE, Ctrl+Z = UNDO, F1–F4 = F1–F4, Ctrl+Enter = CYCLE START, Pause = FEED HOLD.
+
+Programs in Haas format (`%` and an `Onnnnn` line) run in the Haas dialect. The Siemens-mode and ISO programs from the 808D-style control still run on the NGC-style control.
+
+## The 808D-style control
 
 The right-hand side is the control unit: five operating-area keys above an HMI screen, with eight horizontal and eight vertical softkeys. The machine control panel runs along the bottom.
 
@@ -263,6 +291,7 @@ In the 3D view, drag to orbit, right-drag or Shift-drag to pan, and scroll to zo
 | `src/game/fps.js` | First-person controller (pointer lock, WASD, collisions, touch joystick, interaction prompt) |
 | `src/game/parts.js`, `inspect.js`, `drawing.js` | Job drawings (part definitions and reference programs), inspection against the drawing, ISO drawing sheets |
 | `src/game/measuring.js`, `gauges.js` | Measuring instruments: 3D models, readouts, the measuring station and the measurement maths |
+| `src/ui/haas/` | NGC-style control: pendant keyboard and handle (`haas-keys.js`), modes, keys and procedures (`haas.js`), screen panes (`haas-screen.js`), VPS templates (`haas-vps.js`), styles (`haas.css`) |
 | `src/ui/hmi.js` | Operating areas, pages and softkeys |
 | `src/ui/ui.js` | MCP, keyboard, program manager operations, tool editing, wizard |
 | `src/ui/cycleforms.js`, `contour.js`, `programs.js`, `editor.js` | Cycle input screens, contour designer, NC program memory and the editor |
