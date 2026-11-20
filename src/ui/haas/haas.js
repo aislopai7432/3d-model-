@@ -231,7 +231,7 @@ export class HaasControl {
     const app = this.app, c = this.c;
     document.body.classList.toggle('ctl-haas', on);
     const brand = document.querySelector('.brand-text span');
-    if (brand) brand.textContent = on ? 'VMC-MINI · NGC-style control' : 'VMC-560 · 808D-style control';
+    if (brand) brand.textContent = on ? 'Mini Mill · NGC-style control' : 'Mini Mill · 808D-style control';
     if (on) {
       c.doorInterlock = false;
       c.rov = !!this.set(101);

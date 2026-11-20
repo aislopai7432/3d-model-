@@ -11,24 +11,25 @@
 // Three.js world: +X right, +Y up, +Z towards the operator. Table frame (x, y, z) -> local (x, z, -y).
 
 export const MACHINE = {
-  model: 'VMC-560',
-  travel: { x: [-560, 0], y: [-410, 0], z: [-410, 0] },
+  model: 'Mini Mill',
+  travel: { x: [-406, 0], y: [-356, 0], z: [-381, 0] },
   // Machine X/Y that place the spindle centreline over the centre of the table.
-  tableCenter: { x: -280, y: -205 },
-  // Height of the spindle gauge line above the table top when Z is at machine zero.
-  gaugeAtZ0: 500,
+  tableCenter: { x: -203, y: -178 },
+  // Height of the spindle gauge line (spindle nose) above the table top when Z is at machine zero:
+  // the Mini Mill's spindle-nose-to-table range is 102 mm (Z fully down) to 483 mm (Z home).
+  gaugeAtZ0: 483,
   tableTopY: 930, // world height of the table top
-  rapidXY: 24000, // mm/min
-  rapidZ: 18000,
-  maxFeed: 12000,
+  rapidXY: 20300, // mm/min (20.3 m/min)
+  rapidZ: 20300,
+  maxFeed: 16500, // 650 ipm
   accel: 2600, // mm/s^2 used for rapids, homing and jogs
   homingFeed: 6000,
-  maxRpm: 12000,
+  maxRpm: 10000, // Mini Mill with the 10k spindle option
   spindleAccel: 7000, // rpm per second
-  spindlePowerKw: 11,
-  atcPockets: 16,
-  atcLift: 135, // how far the head rises above Z0 to release a tool in the carousel
-  table: { length: 800, width: 380, thickness: 60, slots: 3, slotPitch: 110, slotWidth: 16 },
+  spindlePowerKw: 7.5, // 10 hp
+  atcPockets: 10, // umbrella tool changer
+  atcLift: 90, // how far the head rises above Z0 to release a tool in the carousel
+  table: { length: 914, width: 305, thickness: 60, slots: 3, slotPitch: 110, slotWidth: 16 },
 };
 
 export const INCH = 25.4;
@@ -122,20 +123,20 @@ export const DEFAULT_SETTINGS = {
   jogFeed: 1500,
   jogRpm: 1000,
   dryFeed: 2000,
-  spLimit: 12000,
+  spLimit: 10000,
   freshBlank: true,
-  wal: { on: false, x: [-560, 0], y: [-410, 0], z: [-410, 0] },
+  wal: { on: false, x: [-406, 0], y: [-356, 0], z: [-381, 0] },
 };
 
 // Vise used to hold the stock. Positions are in the table frame.
 export const VISE = {
-  bodyWidth: 170, // along X
-  bodyLength: 420, // along Y
+  bodyWidth: 150, // along X
+  bodyLength: 300, // along Y (fits the 305 mm table)
   floor: 72, // height of the jaw seat / slide above the table
   jawHeight: 46,
-  jawThickness: 42,
-  jawWidth: 170,
-  maxOpening: 210,
+  jawThickness: 34,
+  jawWidth: 150,
+  maxOpening: 120,
 };
 
 // Umbrella tool changer timing (seconds). Shared by the interpreter (cycle time estimate) and the
