@@ -12,7 +12,6 @@ const VIEWS_VMC560 = {
   work: { pos: [380, 1330, 620], target: [0, 1000, 0] },
   machine: { pos: [3300, 2600, 4200], target: [0, 1250, -150] },
 };
-const VIEWS = PROFILE.id === 'vmc560' ? VIEWS_VMC560 : VIEWS_MINI;
 const VIEWS_MINI = {
   iso: { pos: [-1350, 2250, 4000], target: [80, 1500, -60] },
   front: { pos: [100, 1650, 4600], target: [100, 1650, 0] },
@@ -21,6 +20,7 @@ const VIEWS_MINI = {
   work: { pos: [-150, 1500, 1400], target: [0, 1040, 0] },
   machine: { pos: [3700, 2800, 5500], target: [-60, 1650, -100] },
 };
+const VIEWS = PROFILE.id === 'vmc560' ? VIEWS_VMC560 : VIEWS_MINI;
 
 export class Viewer {
   constructor(canvas, container) {

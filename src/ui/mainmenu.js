@@ -81,7 +81,7 @@ function show(app) {
     const e = ENTRIES[idx];
     const cur = e.machine === PROFILE.id;
     q('h2').innerHTML = `${e.title}${e.tag && !cur ? `<em>${e.tag}</em>` : ''}${cur ? '<em class="cur">Current</em>' : ''}${e.disabled ? '<em>Coming later</em>' : ''}`;
-    q('p').textContent = e.sub;
+    q('.mm-info p').textContent = e.sub;
     go.disabled = !!e.disabled;
     go.textContent = e.disabled ? 'Coming later' : 'Select';
     root.querySelectorAll('.mm-dots i').forEach((d, i) => d.classList.toggle('on', i === idx));
@@ -164,9 +164,10 @@ function show(app) {
     const key = new THREE.DirectionalLight(0xffffff, 2.4); key.position.set(1500, 3000, 2500); scene.add(key);
     const rim = new THREE.DirectionalLight(0x6fa8ff, 1.2); rim.position.set(-2500, 1500, -2000); scene.add(rim);
     const cam = new THREE.PerspectiveCamera(28, 1, 100, 40000);
-    const SP = 3600;
+    const SP = 5600;
     const items = ENTRIES.map(() => null); // { holder, spin, size }
     const own = []; // things to dispose
+    window.__mmItems = items;
     let T = null;
     const holderFor = (i, obj) => {
       const holder = new THREE.Group(), spin = new THREE.Group();
@@ -194,6 +195,8 @@ function show(app) {
         const m = new M(T);
         try { m.setEnclosureVisible?.(true); m.setLights?.(true); } catch { /* optional */ }
         obj = m.root;
+        const fl = obj.getObjectByName('floor'); // the machine's own room floor would swamp the framing
+        if (fl) fl.parent.remove(fl);
       }
       obj.traverse((o) => { if (o.isLight) o.visible = false; });
       holderFor(i, obj);
