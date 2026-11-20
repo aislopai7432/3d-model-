@@ -228,7 +228,8 @@ export class Vmc560Model {
     g.add(tube);
     const inner = new THREE.Group();
     inner.add(g);
-    if (axis === 'x') g.rotation.z = Math.PI / 2;
+    // spin about the screw's own axis first, then lay it along X (default XYZ order would swing it round Y)
+    if (axis === 'x') { g.rotation.order = 'ZYX'; g.rotation.z = Math.PI / 2; }
     if (axis === 'z') g.rotation.x = Math.PI / 2;
     inner.userData.spin = g;
     inner.userData.axis = axis;
