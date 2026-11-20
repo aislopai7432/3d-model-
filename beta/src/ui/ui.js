@@ -683,7 +683,7 @@ export class UI {
     const root = document.documentElement;
     let s = {};
     try { s = JSON.parse(localStorage.getItem('milllab.layout') || '{}'); } catch { /* ignore */ }
-    if (s.cu) root.style.setProperty('--cu', s.cu + 'px');
+    if (s.cu) { root.style.setProperty('--cu', s.cu + 'px'); root.style.setProperty('--cu-u', s.cu + 'px'); }
     const sp = $('.splitter');
     sp.addEventListener('pointerdown', (e) => {
       e.preventDefault();
@@ -693,6 +693,7 @@ export class UI {
       const move = (ev) => {
         const w = Math.max(420, Math.min(ws.width - 360, ws.right - ev.clientX));
         root.style.setProperty('--cu', w + 'px');
+        root.style.setProperty('--cu-u', w + 'px');
         s.cu = w;
       };
       const up = () => {
@@ -706,6 +707,7 @@ export class UI {
     });
     sp.addEventListener('dblclick', () => {
       root.style.removeProperty('--cu');
+      root.style.removeProperty('--cu-u');
       delete s.cu;
       try { localStorage.setItem('milllab.layout', JSON.stringify(s)); } catch { /* ignore */ }
     });
