@@ -10,6 +10,7 @@ import { findCall, formatCall } from '../ui/cycleforms.js';
 import { DRILL_POINT_K } from './parts.js';
 import { MATERIALS } from '../config.js';
 import { MARK_RE } from './tutorial-template.js';
+import { haasSteps, fillHaas } from './tutorial-haas.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -121,6 +122,7 @@ export class Tutorial {
     this.marker = buildMarker();
     this._v = new THREE.Vector3();
     this._w = new THREE.Vector3();
+    this.ctl = this.ctlNow();
     this.steps = this.buildSteps();
     this.buildDom();
   }
@@ -253,6 +255,7 @@ export class Tutorial {
     if (app.programName !== name && !this.refLoaded()) app.openProgram(name);
   }
   fill(op) {
+    if (this.ctl === 'haas') return fillHaas(this, op);
     const s = this.step(op);
     if (!s) return;
     const hmi = this.hmi, ed = this.app.ui.editor;
@@ -401,7 +404,7 @@ export class Tutorial {
       },
     });
 
-    return [
+    const all = [
       { id: 'welcome', phase: 'Start', title: 'Your first part', explain: true,
         text: () => `This tutorial takes you through a whole job: you pick drawing <b>${esc(P.drawingNo)}</b> from the job board and turn a sawn blank into a finished, inspected part on the real control. Each step continues by itself once you have done it; use <b>Skip step</b> if you already know it.` },
       { id: 'look', phase: 'Shop floor', title: 'Look around',
@@ -599,6 +602,35 @@ export class Tutorial {
         text: () => `You read a drawing, chose the blank, set up the machine, programmed three cycles, machined and inspected the part. Pick your next job at the <b>job board</b> (P01 is a good start). Restart this tutorial any time from <b>Help</b> or with <b>T</b>.`,
         done: () => ack('finish') },
     ];
+    return this.ctl === 'haas' ? this.haasify(all) : all;
+  }
+
+  // ---------------------------------------------------------------- control style
+  ctlNow() { return this.app.haas?.active ? 'haas' : '808d'; }
+  // the player switched the control style (Settings): rebuild the steps and stay on the same one, or
+  // on the start of the control part when the step does not exist on the other control
+  switchControl() {
+    const id = this.cur.id;
+    this.cur.leave?.();
+    this.ctl = this.ctlNow();
+    this.steps = this.buildSteps();
+    let i = this.steps.findIndex((x) => x.id === id);
+    if (i < 0) i = Math.max(0, this.steps.findIndex((x) => x.id === 'pendant') + 1);
+    this.idx = i;
+    this.hold = false;
+    this.game.s.tut.step = this.cur.id;
+    this.cur.enter?.();
+    this.render(true);
+  }
+  // the control steps of the NGC-style (Haas) control replace the 808D ones (tutorial-haas.js)
+  haasify(all) {
+    const { control, run } = haasSteps(this);
+    const ix = (id) => all.findIndex((s) => s.id === id);
+    const a = ix('areas'), b = ix('prog-drill'), c = ix('closeDoors'), d = ix('watch');
+    const out = [...all.slice(0, a), ...control, ...all.slice(b + 1, c), ...run, ...all.slice(d + 1)];
+    const p = out.find((s) => s.id === 'pendant');
+    p.text = () => 'Use the <b>control panel</b> (the pendant hanging on the right of the doors). The NGC-style CNC control opens: screen at the top, the keyboard below it, the handle wheel and CYCLE START on the left, your drawing on the left of the view.';
+    return out;
   }
 
   // ---------------------------------------------------------------- DOM
@@ -784,6 +816,7 @@ export class Tutorial {
   update(dt) {
     if (!this.active) return;
     this.t += dt;
+    if (this.ctl !== this.ctlNow()) this.switchControl();
     const s = this.cur;
     // looking around (any step; the 'look' step reads it)
     const fp = this.game.fp, l = this._look;
