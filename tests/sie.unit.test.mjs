@@ -4,7 +4,7 @@ const { DEFAULT_TOOLS, MACHINE } = await import(R + 'config.js');
 const { ZMap } = await import(R + 'sim/zmap.js');
 const { makeCutter } = await import(R + 'sim/tooling.js');
 const tools = new Map(DEFAULT_TOOLS.map((t) => [t.number, { ...t }]));
-const offsets = [{ x: -280, y: -205, z: -368 }, ...Array(5).fill(0).map(() => ({ x: 0, y: 0, z: 0 }))];
+const offsets = [{ x: -203, y: -178, z: -351 }, ...Array(5).fill(0).map(() => ({ x: 0, y: 0, z: 0 }))];
 let fail = 0;
 const ok = (c, m) => { console.log((c ? 'ok   ' : 'FAIL ') + m); if (!c) fail++; };
 const comp = (code, extra = {}) => compileProgram(code, { tools, offsets, requireG43: true, arcTol: 0.005, dialect: 'siemens', ...extra }, { pos: { x: 0, y: 0, z: 0 }, tool: 2 });
@@ -40,7 +40,7 @@ function cut(code) {
     if (op.t !== 'move') continue;
     for (let i = 3; i < op.pts.length; i += 3) {
       const L = op.tlen;
-      z.sweep(op.pts[i - 3] + 280, op.pts[i - 2] + 205, 500 + op.pts[i - 1] - L, op.pts[i] + 280, op.pts[i + 1] + 205, 500 + op.pts[i + 2] - L, t2);
+      z.sweep(op.pts[i - 3] + 203, op.pts[i - 2] + 178, 483 + op.pts[i - 1] - L, op.pts[i] + 203, op.pts[i + 1] + 178, 483 + op.pts[i + 2] - L, t2);
     }
   }
   return z;

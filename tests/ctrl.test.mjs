@@ -8,7 +8,7 @@ let fail = 0;
 for (const e of EXAMPLES) {
   const ex = getExample(e.id);
   const top = VISE.floor + VISE.jawHeight + ex.stock.protrusion;
-  const offsets = [{ x: -280, y: -205, z: top - MACHINE.gaugeAtZ0 }, ...Array(5).fill({ x: 0, y: 0, z: 0 })];
+  const offsets = [{ x: -203, y: -178, z: top - MACHINE.gaugeAtZ0 }, ...Array(5).fill({ x: 0, y: 0, z: 0 })];
   const c = new Controller();
   c.offsets = offsets;
   c.homed = true; c.pos = { x: 0, y: 0, z: 0 }; c.door.pos = c.door.target = 0;
@@ -32,7 +32,7 @@ for (const e of EXAMPLES) {
 // single block: should hold after the first line with ops
 {
   const c = new Controller(); c.homed = true; c.pos = { x: 0, y: 0, z: 0 }; c.door.pos = c.door.target = 0;
-  c.offsets = [{ x: -280, y: -205, z: -368 }, ...Array(5).fill({ x: 0, y: 0, z: 0 })];
+  c.offsets = [{ x: -203, y: -178, z: -351 }, ...Array(5).fill({ x: 0, y: 0, z: 0 })];
   const it = new Interpreter({ tools, offsets: c.offsets, requireG43: true, arcTol: 0.01 });
   c.program = it.compile('G0 X10 Y10\nG0 X20\nG0 X30\nM30', { pos: c.pos, tool: 0 });
   c.singleBlock = true; c.cycleStart();
@@ -50,7 +50,7 @@ for (const e of EXAMPLES) {
   console.log((ok3 && c.state === 'complete' ? 'ok   ' : 'FAIL ') + 'M00 stops then resumes', c.state); if (!(ok3 && c.state === 'complete')) fail++;
   // alarm from motion handler
   c.program = it.compile('G0 X10\nG0 X50\nM30', { pos: c.pos, tool: 0 });
-  c.onMotion = (a, b) => (b.x > -280 + 30 ? 'test collision' : null);
+  c.onMotion = (a, b) => (b.x > -203 + 30 ? 'test collision' : null);
   c.cycleStart(); for (let i = 0; i < 300; i++) c.update(1 / 60);
   console.log((c.state === 'alarm' ? 'ok   ' : 'FAIL ') + 'alarm stops machine at x=' + (c.pos.x + 280).toFixed(2)); if (c.state !== 'alarm') fail++;
   c.reset(); console.log((c.state === 'idle' ? 'ok   ' : 'FAIL ') + 'reset clears alarm');

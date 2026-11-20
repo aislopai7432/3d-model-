@@ -27,10 +27,10 @@ function viseBoxes(place) {
   const W = place.width, fl = VISE.floor, jt = place.jawTop, jw = VISE.jawWidth / 2, th = VISE.jawThickness;
   const b = (name, x0, y0, z0, x1, y1, z1) => ({ name, min: [x0, y0, z0], max: [x1, y1, z1] });
   return [
-    b('vise base', -95, -255, 0, 95, 205, 20), b('vise body', -78, -240, 20, 78, 195, fl - 10),
+    b('vise base', -85, -150, 0, 85, 150, 20), b('vise body', -70, -140, 20, 70, 140, fl - 10),
     b('fixed jaw', -jw, W / 2 + 6, fl, jw, W / 2 + th, jt), b('fixed jaw plate', -jw, W / 2, fl + 4, jw, W / 2 + 6, jt),
     b('moving jaw', -jw, -W / 2 - th, fl, jw, -W / 2 - 6, jt), b('moving jaw plate', -jw, -W / 2 - 6, fl + 4, jw, -W / 2, jt),
-    b('vise body', -78, W / 2 + th, fl - 10, 78, Math.min(195, W / 2 + th + 40), fl + 20), b('vise handle', -110, -350, 30, 110, -255, 60),
+    b('vise body', -70, W / 2 + th, fl - 10, 70, Math.min(140, W / 2 + th + 30), fl + 20), b('vise handle', -85, -270, 30, 85, -150, 60),
   ];
 }
 

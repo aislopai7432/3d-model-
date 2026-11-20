@@ -784,7 +784,7 @@ export class HMI {
 
   page_version(el) {
     el.innerHTML = `<div class="hp"><div class="hbox"><div class="hbox-h">Version</div><div class="hbox-b kvl">
-      <span>Simulator</span><b>MillLab mini mill with an 808D-style control</b><span>Machine</span><b>3-axis mini mill, X 406 / Y 356 / Z 381 mm, 10 000 rpm, 10-pocket umbrella changer</b>
+      <span>Simulator</span><b>MillLab mini mill with an 808D-style control</b><span>Machine</span><b>3-axis mini mill, X 406 / Y 356 / Z 381 mm, 12 000 rpm, 10-pocket umbrella changer</b>
       <span>Languages</span><b>Siemens mode (G290) and ISO dialect (G291)</b><span>Material removal</span><b>Z-map (dexel heightfield), exact for 3-axis vertical cutters</b>
       <span>Rendering</span><b>Three.js 0.160 (WebGL 2)</b></div>
       <div class="hbox-b hnote">MillLab is an independent training simulator. Its operating concept follows the SINUMERIK 808D (operating areas, softkeys, cycles and Siemens-mode programming) for learning purposes; it is not Siemens software and is not affiliated with or endorsed by Siemens AG. SINUMERIK is a trademark of Siemens AG. Cycle parameters follow the documented standard-cycle signatures as closely as possible; check the official manuals before running programs on a real machine.</div></div></div>`;

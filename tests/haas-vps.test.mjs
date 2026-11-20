@@ -7,7 +7,7 @@ import { VPS_TEMPLATES, defaults, generate, holePattern } from '../src/ui/haas/h
 let fail = 0;
 const chk = (ok, m) => { if (!ok) { fail++; console.log('FAIL ' + m); } };
 const tools = new Map(DEFAULT_TOOLS.map((t) => [t.number, { ...t, dLength: 0, dRadius: 0 }]));
-const offsets = Array.from({ length: 6 }, () => ({ x: -280, y: -205, z: -430 }));
+const offsets = Array.from({ length: 6 }, () => ({ x: -203, y: -178, z: -413 }));
 for (const tpl of VPS_TEMPLATES) {
   for (const inch of [false, true]) {
     for (const haas of [true, false]) {

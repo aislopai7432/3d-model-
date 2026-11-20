@@ -23,7 +23,7 @@ for (const e of EXAMPLES) {
 }
 // unit checks
 function compile(code, opts = {}) {
-  const it = new Interpreter({ tools, offsets: [{ x: -280, y: -205, z: -368 }, {x:0,y:0,z:0},{x:0,y:0,z:0},{x:0,y:0,z:0},{x:0,y:0,z:0},{x:0,y:0,z:0}], requireG43: true, arcTol: 0.01, ...opts });
+  const it = new Interpreter({ tools, offsets: [{ x: -203, y: -178, z: -351 }, {x:0,y:0,z:0},{x:0,y:0,z:0},{x:0,y:0,z:0},{x:0,y:0,z:0},{x:0,y:0,z:0}], requireG43: true, arcTol: 0.01, ...opts });
   return it.compile(code, { pos: { x: 0, y: 0, z: 0 }, tool: 2 });
 }
 function assert(c, m) { if (!c) { console.log('FAIL', m); fail++; } else console.log('ok  ', m); }
@@ -31,11 +31,11 @@ let r = compile('G90 G54 G0 X10 Y5\nG43 H2 Z10\nG1 Z-1 F100\nG2 X20 Y5 I5 J0\nG3
 assert(r.errors.length === 0, 'basic program compiles');
 const last = r.ops.filter((o) => o.t === 'move').pop();
 const p = last.pts.slice(-3);
-assert(Math.abs(p[0] - (-280 + 5)) < 1e-9 && Math.abs(p[1] - (-205 + 5)) < 1e-9, 'incremental move lands at X5 Y5 work');
+assert(Math.abs(p[0] - (-203 + 5)) < 1e-9 && Math.abs(p[1] - (-178 + 5)) < 1e-9, 'incremental move lands at X5 Y5 work');
 const arc = r.ops.filter((o) => o.t === 'move')[3];
 let maxy = -1e9; for (let i = 1; i < arc.pts.length; i += 3) maxy = Math.max(maxy, arc.pts[i]);
 let miny = 1e9; for (let i = 1; i < arc.pts.length; i += 3) miny = Math.min(miny, arc.pts[i]);
-assert(Math.abs(miny + 205 - 5) < 1e-6 && Math.abs(maxy + 205 - 10) < 0.02, 'G2 from X10 to X20 around X15 passes over the top' + ` miny=${miny + 205} maxy=${maxy+205}`);
+assert(Math.abs(miny + 178 - 5) < 1e-6 && Math.abs(maxy + 178 - 10) < 0.02, 'G2 from X10 to X20 around X15 passes over the top' + ` miny=${miny + 205} maxy=${maxy+178}`);
 r = compile('G0 X0 Y0\nG1 X10 F100\nG41 D2 X5');
 assert(r.errors.length === 1 && /G41/.test(r.errors[0].msg), 'G41 rejected: ' + r.errors[0]?.msg);
 r = compile('G0 X0 Y0\nG1 X10');
@@ -52,7 +52,7 @@ r = compile('G0 X1 (unclosed');
 assert(r.errors.length === 1 && /closing/.test(r.errors[0].msg), 'unclosed comment: ' + r.errors[0]?.msg);
 r = compile('G20 G0 X1. Y1.\nG21');
 const m = r.ops.find((o) => o.t === 'move');
-assert(Math.abs(m.pts[3] - (-280 + 25.4)) < 1e-9, 'G20 converts inches');
+assert(Math.abs(m.pts[3] - (-203 + 25.4)) < 1e-9, 'G20 converts inches');
 r = compile('G43 H2 G0 Z50\nG0 X0 Y0\nG98 G81 X10 Y10 Z-5 R2 F100\nX20\nG80');
 const moves = r.ops.filter((o) => o.t === 'move');
 assert(r.errors.length === 0 && moves.length === 10, 'G81 generates moves: ' + moves.length);

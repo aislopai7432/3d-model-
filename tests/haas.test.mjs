@@ -14,7 +14,7 @@ const { inspectPart } = await import(R + 'game/inspect.js');
 
 const tools = new Map(DEFAULT_TOOLS.map((t) => [t.number, { ...t }]));
 const cutters = new Map(DEFAULT_TOOLS.map((t) => [t.number, makeCutter(t)]));
-const OFF = { x: -280, y: -205, z: -368 };
+const OFF = { x: -203, y: -178, z: -351 };
 const offsets = [OFF, ...Array(5).fill(0).map(() => ({ x: 0, y: 0, z: 0 }))];
 let fail = 0;
 const ok = (c, m) => {
@@ -318,7 +318,7 @@ for (const ex of EXAMPLES_HAAS) {
   const st = ex.stock;
   const prot = Math.max(2, Math.min(st.protrusion, st.z - 3));
   const top = VISE.floor + VISE.jawHeight + prot;
-  const offs = [{ x: -280, y: -205, z: top - MACHINE.gaugeAtZ0 }, ...Array(5).fill(0).map(() => ({ x: 0, y: 0, z: 0 }))];
+  const offs = [{ x: -203, y: -178, z: top - MACHINE.gaugeAtZ0 }, ...Array(5).fill(0).map(() => ({ x: 0, y: 0, z: 0 }))];
   const res = compileProgram(ex.code, { tools, offsets: offs, requireG43: true, arcTol: 0.01, dialect: 'siemens' }, { pos: { x: 0, y: 0, z: 0 }, tool: 0, carousel: 1 });
   const zm = new ZMap({ x0: -st.x / 2, y0: -st.y / 2, lx: st.x, ly: st.y, top, bottom: top - st.z, cell: 0.5, maxNodes: 200000 });
   const c = new Controller();
@@ -328,7 +328,7 @@ for (const ex of EXAMPLES_HAAS) {
     const cut = c.tool ? cutters.get(c.tool) : null;
     if (!cut) return null;
     const L = cut.length;
-    const ax = a.x + 280, ay = a.y + 205, az = 500 + a.z - L, bx = b2.x + 280, by = b2.y + 205, bz = 500 + b2.z - L;
+    const ax = a.x + 203, ay = a.y + 178, az = 483 + a.z - L, bx = b2.x + 203, by = b2.y + 178, bz = 483 + b2.z - L;
     zm.shankExcess = 0;
     const v = zm.sweep(ax, ay, az, bx, by, bz, cut);
     if (v > 0.05 && op.rapid) return `rapid into material line ${op.line + 1}`;

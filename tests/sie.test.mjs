@@ -15,7 +15,7 @@ for (const e of EXAMPLES_808) {
   const st = ex.stock;
   const prot = Math.max(2, Math.min(st.protrusion, st.z - 3));
   const top = VISE.floor + VISE.jawHeight + prot;
-  const offsets = [{ x: -280, y: -205, z: top - MACHINE.gaugeAtZ0 }, ...Array(5).fill(0).map(() => ({ x: 0, y: 0, z: 0 }))];
+  const offsets = [{ x: -203, y: -178, z: top - MACHINE.gaugeAtZ0 }, ...Array(5).fill(0).map(() => ({ x: 0, y: 0, z: 0 }))];
   const t0 = performance.now();
   const res = compileProgram(ex.code, { tools, offsets, requireG43: true, arcTol: 0.01, dialect: 'siemens' }, { pos: { x: 0, y: 0, z: 0 }, tool: 0, carousel: 1 });
   const ms = performance.now() - t0;
@@ -28,7 +28,7 @@ for (const e of EXAMPLES_808) {
     const cut = c.tool ? cutters.get(c.tool) : null;
     if (!cut) return null;
     const L = cut.length;
-    const ax = a.x + 280, ay = a.y + 205, az = 500 + a.z - L, bx = b.x + 280, by = b.y + 205, bz = 500 + b.z - L;
+    const ax = a.x + 203, ay = a.y + 178, az = 483 + a.z - L, bx = b.x + 203, by = b.y + 178, bz = 483 + b.z - L;
     zm.shankExcess = 0;
     const v = zm.sweep(ax, ay, az, bx, by, bz, cut);
     if (v > 0.05 && op.rapid) return `rapid into material line ${op.line + 1}`;

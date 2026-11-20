@@ -24,7 +24,7 @@ export const MACHINE = {
   maxFeed: 16500, // 650 ipm
   accel: 2600, // mm/s^2 used for rapids, homing and jogs
   homingFeed: 6000,
-  maxRpm: 10000, // Mini Mill with the 10k spindle option
+  maxRpm: 12000, // Mini Mill with the 12k spindle option
   spindleAccel: 7000, // rpm per second
   spindlePowerKw: 7.5, // 10 hp
   atcPockets: 10, // umbrella tool changer
@@ -123,7 +123,7 @@ export const DEFAULT_SETTINGS = {
   jogFeed: 1500,
   jogRpm: 1000,
   dryFeed: 2000,
-  spLimit: 10000,
+  spLimit: 12000,
   freshBlank: true,
   wal: { on: false, x: [-406, 0], y: [-356, 0], z: [-381, 0] },
 };

@@ -480,7 +480,7 @@ export function buildWorkshop(opts = {}) {
     B.add('floor', M.stain, tPlane(), mtx(x, 0.8, z, s, s, 1, -HALF_PI, 0, (x * 0.37) % 3, 'XYZ'), [u, 0.5 - v, u + 0.5, 1 - v]);
   }
   // anti-fatigue mats: in front of the VMC (replaces the one in machine.js 'floor'), lathe, bench
-  B.box('floor', M.rubber, -750, 0, 940, 750, 14, 1700);
+  B.box('floor', M.rubber, -700, 0, 880, 800, 14, 1650);
   B.box('floor', M.rubber, -6700, 0, -3950, -4700, 12, -3350);
   B.box('floor', M.rubber, -1500, 0, -4150, 600, 12, -3600);
 
@@ -1318,9 +1318,8 @@ export function buildWorkshop(opts = {}) {
 
   // ---------- VMC footprint colliders (machine.js geometry)
   B.colliders.push(
-    { minX: -1120, maxX: 1060, minZ: -1520, maxZ: 770 }, // enclosure, rear cabinet, coolant tank
-    { minX: 1050, maxX: 2010, minZ: -530, maxZ: -70 }, // chip conveyor + bin
-    { minX: 760, maxX: 1220, minZ: 880, maxZ: 1080 }, // pendant arm / control panel
+    { minX: -940, maxX: 800, minZ: -1260, maxZ: 660 }, // Mini Mill cabinet, rear cabinet, coolant tank
+    { minX: 300, maxX: 860, minZ: 640, maxZ: 850 }, // integrated pendant + tray
   );
 
   // ================================================================ emit meshes
