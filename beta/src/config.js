@@ -10,8 +10,22 @@
 //   The stock, vise, Z-map and toolpath are all expressed in this frame because they ride on the table.
 // Three.js world: +X right, +Y up, +Z towards the operator. Table frame (x, y, z) -> local (x, z, -y).
 
+// Machine profile, chosen once at page load: ?machine=minimill|vmc560, else localStorage 'milllab.machine',
+// else the Mini Mill. Switching machines stores the id and reloads the page.
+export const PROFILES = {
+  minimill: { id: 'minimill', model: 'Mini Mill', maxRpm: 12000 },
+  vmc560: { id: 'vmc560', model: 'VMC-560', maxRpm: 10000 },
+};
+function pickProfile() {
+  let id = null;
+  try { id = new URLSearchParams(location.search).get('machine'); } catch { /* not in a browser */ }
+  if (!PROFILES[id]) { try { id = localStorage.getItem('milllab.machine'); } catch { id = null; } }
+  return PROFILES[id] || PROFILES.minimill;
+}
+export const PROFILE = pickProfile();
+
 export const MACHINE = {
-  model: 'Mini Mill',
+  model: PROFILE.model,
   travel: { x: [-406, 0], y: [-356, 0], z: [-381, 0] },
   // Machine X/Y that place the spindle centreline over the centre of the table.
   tableCenter: { x: -203, y: -178 },
@@ -24,7 +38,7 @@ export const MACHINE = {
   maxFeed: 16500, // 650 ipm
   accel: 2600, // mm/s^2 used for rapids, homing and jogs
   homingFeed: 6000,
-  maxRpm: 12000, // Mini Mill with the 12k spindle option
+  maxRpm: PROFILE.maxRpm, // Mini Mill 12k spindle option / VMC-560 10k
   spindleAccel: 7000, // rpm per second
   spindlePowerKw: 7.5, // 10 hp
   atcPockets: 10, // umbrella tool changer
@@ -123,7 +137,7 @@ export const DEFAULT_SETTINGS = {
   jogFeed: 1500,
   jogRpm: 1000,
   dryFeed: 2000,
-  spLimit: 12000,
+  spLimit: PROFILE.maxRpm,
   freshBlank: true,
   wal: { on: false, x: [-406, 0], y: [-356, 0], z: [-381, 0] },
 };
