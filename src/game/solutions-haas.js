@@ -1065,7 +1065,7 @@ export const HAAS_TUTORIAL_STEPS = [
   },
 ];
 
-const T01_HEADER = [
+export const T01_HEADER = [
   '%',
   'O00001 (T01 FIRST PART)',
   '(DRG ML-0001 REV A - MILLLAB TRAINING)',
@@ -1076,7 +1076,7 @@ const T01_HEADER = [
   'G21 (METRIC)',
   'G00 G17 G40 G49 G80 G90 (SAFETY LINE)',
 ];
-const T01_END = ['G28 G91 Y0. (TABLE FORWARD FOR UNLOADING)', 'M30'];
+export const T01_END = ['G28 G91 Y0. (TABLE FORWARD FOR UNLOADING)', 'M30'];
 
 // Full Haas program assembled from the steps: header, every step's blocks, end, then the subprograms.
 export function haasTutorialProgramFromSteps(steps = HAAS_TUTORIAL_STEPS) {
