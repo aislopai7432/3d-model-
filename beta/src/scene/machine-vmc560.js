@@ -284,7 +284,7 @@ export class Vmc560Model {
     this.bx(-430, 752, -220, 430, 846, 220, M.cast, S, 12);
     this.bx(-436, 770, -200, 436, 828, 200, M.castDark, S, 6);
     // Y carriages (stay on the Y rails, z -446..590, over the whole travel)
-    for (const x of [-300, 300]) for (const z of [-160, 160]) this.bx(x - 38, 718, z - 50, x + 38, 754, z + 50, M.rail, S, 3);
+    for (const x of [-300, 300]) for (const z of [-70, 70]) this.bx(x - 38, 718, z - 36, x + 38, 754, z + 36, M.rail, S, 3);
     // Y ball nut housing
     this.bx(-55, 696, -60, 55, 752, 60, M.castDark, S, 6);
     // X rails
@@ -333,7 +333,7 @@ export class Vmc560Model {
         g.add(side);
       }
       // wiper lip on the end that faces the saddle, riding over the next (smaller) section
-      const lip = new THREE.Mesh(new THREE.BoxGeometry(w + 4, 8, 6), this.M.paintDark);
+      const lip = new THREE.Mesh(new THREE.BoxGeometry(w + 7, 8, 6), this.M.paintDark);
       lip.position.set(0, 2, (dir * segLen) / 2);
       g.add(lip);
       g.userData.y = 766 - k * 5;
@@ -393,13 +393,13 @@ export class Vmc560Model {
     const table = new THREE.Mesh(geo, M.table);
     Tg.add(table);
     // table underside, carriages, nut bracket
-    this.bx(-tb.length / 2 + 20, 870, -hw + 20, tb.length / 2 - 20, TT - H, hw - 20, M.cast, Tg);
+    this.bx(-tb.length / 2 + 20, 874, -hw + 20, tb.length / 2 - 20, TT - H, hw - 20, M.cast, Tg);
     // carriages close to the middle so they stay on the X rails (x +-430) at both ends of the travel
-    for (const x of [-90, 90]) for (const z of [-125, 125]) this.bx(x - 50, 856, z - 34, x + 50, 878, z + 34, M.rail, Tg, 3);
+    for (const x of [-90, 90]) for (const z of [-125, 125]) this.bx(x - 50, 856, z - 34, x + 50, 880, z + 34, M.rail, Tg, 3);
     // ball nut bracket hanging round the X screw
     this.bx(-40, 849, -30, 40, 871, 30, M.castDark, Tg, 3);
     // end plates and chip guards
-    for (const s of [-1, 1]) this.bx(s * (tb.length / 2) - 4, 870, -hw, s * (tb.length / 2) + 4, TT + 4, hw, M.paintDark, Tg);
+    for (const s of [-1, 1]) this.bx(s > 0 ? tb.length / 2 : -tb.length / 2 - 8, 876, -hw + 1, s > 0 ? tb.length / 2 + 8 : -tb.length / 2, TT - 2, hw - 1, M.paintDark, Tg);
     this.workGroup = new THREE.Group();
     this.workGroup.name = 'work';
     this.workGroup.position.y = TT;
@@ -979,7 +979,7 @@ export class Vmc560Model {
     this.zScrew.userData.spin.rotation.y = ang(headZ);
     // way covers: front from base front edge to saddle front, rear from column to saddle back
     const sz = this.saddle.position.z;
-    this.layoutCover(this.frontCover, 620, sz + 220);
+    this.layoutCover(this.frontCover, 608, sz + 220);
     this.layoutCover(this.rearCover, -800, sz - 220);
     // doors
     for (const d of this.doors) d.position.x = d.userData.closedX + (d.userData.openX - d.userData.closedX) * (s.door || 0);

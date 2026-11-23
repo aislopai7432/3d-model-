@@ -220,6 +220,16 @@ export class HaasControl {
     });
     if (window.ResizeObserver) new ResizeObserver(() => { this.layout(); this.paint(); }).observe(root);
     window.addEventListener('keyup', (e) => this.handleKeyUp(e));
+    // Ctrl+V in EDIT or LIST PROGRAM stores the clipboard text as an O-number program
+    document.addEventListener('paste', (e) => this.handlePaste(e));
+    window.addEventListener('dragover', (e) => { if (this.active && e.dataTransfer?.types?.includes('Files')) e.preventDefault(); });
+    window.addEventListener('drop', (e) => {
+      const f = e.dataTransfer?.files?.[0];
+      if (!this.active || !f) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      this.app.ui.importFile(f);
+    }, true);
     // start-up: informative alarm 102 like the real control after power on
     this.addAlarm({ num: 102, text: ALARM_TEXT[102] }, true);
     this.say('Press RESET to clear alarm 102 SERVOS OFF, then POWER UP to zero return the machine.');
@@ -262,6 +272,7 @@ export class HaasControl {
   setControl(kind) {
     if (this.c.exec) return this.say('Stop the program before changing the control', 'warn');
     this.app.settings.control = kind;
+    if (kind !== '808d') this.app.seedHaasMemory();
     this.app.save();
     this.applyActive();
     if (kind === '808d') {
@@ -300,6 +311,7 @@ export class HaasControl {
         <li><b>Start up.</b> Press <b>RESET</b> to clear <i>102 SERVOS OFF</i>, then <b>POWER UP</b>: Z homes first, then X and Y.</li>
         <li><b>Set up.</b> <b>HANDLE JOG</b>, pick an increment (<b>.0001/.1</b> … <b>.1/100.</b>), press an axis key to select it and turn the handle (drag or scroll). <b>OFFSET</b> › Tool: jog the tool to the part top and press <b>TOOL OFFSET MEASURE</b>. OFFSET › Work: cursor to G54 X and press <b>PART ZERO SET</b> (X, then Y). F3 offers probing actions.</li>
         <li><b>Programs.</b> <b>LIST PROGRAM</b> shows the memory and the USB stick: <b>SELECT PROGRAM</b> makes one active, <b>INSERT</b> creates one, <b>ALTER</b> edits, <b>ERASE PROGRAM</b> deletes. <b>EDIT</b> opens the editor (INSERT / ALTER / DELETE / UNDO with the input line) and VPS templates (F4 generates G-code).</li>
+        <li><b>Real Haas / CAM programs.</b> Copy the program text (Fusion 360, Mastercam, a Haas control, an e-mail) and press <b>Ctrl+V</b> in EDIT or LIST PROGRAM, or drop the file on the page: it becomes an <b>Onnnnn</b> program in memory (CRLF, BOM, tabs, lower case, ";" comments and a missing % or O number are fixed). Select MEMORY and press CYCLE START. A tool number that is not in the tool table runs as a generic Ø10 end mill with a warning.</li>
         <li><b>Run.</b> <b>MEMORY</b> then <b>CYCLE START</b>. <b>SINGLE BLOCK</b>, <b>OPTION STOP</b>, <b>BLOCK DELETE</b>, <b>FEED HOLD</b>, the feed / spindle / rapid override keys. <b>MDI</b>: type a block (e.g. <code>T1 M06 ;</code>), INSERT, CYCLE START.</li>
         <li><b>Doors.</b> The SETUP MODE key switch (side panel) is locked = RUN mode: CYCLE START needs the door closed and the door stays locked while the machine moves. Unlocked = SETUP mode: jogging with the door open, rapids limited to 25 %, spindle to Setting 292, and CYCLE START must be held down.</li>
       </ol>
@@ -505,6 +517,36 @@ export class HaasControl {
     this.press(id, { shift, phys: true });
     if (/^F[34]$/.test(id)) this._physHeld = id;
     return true;
+  }
+
+  handlePaste(e) {
+    if (!this.active || e.defaultPrevented) return;
+    const g = this.app.game;
+    if (g && g.mode === 'workshop' && (!g.op || g.ui.topModal() || g.measuring)) return;
+    const t = e.target;
+    if (t && (t.isContentEditable || /^(TEXTAREA|SELECT)$/.test(t.tagName) || (t.tagName === 'INPUT' && !/^(button|checkbox|radio|range)$/i.test(t.type)))) return;
+    const text = e.clipboardData?.getData('text/plain') ?? '';
+    if (!text.trim()) return;
+    e.preventDefault();
+    this.pasteProgram(text);
+  }
+
+  // The pasted text becomes Onnnnn program(s) in memory; the first one is selected.
+  pasteProgram(text, fileName = '') {
+    if (this.mode !== 'EDIT' && this.mode !== 'LIST') return this.say('Paste (Ctrl+V): select EDIT or LIST PROGRAM first', 'warn');
+    if (this.locked('programs')) return;
+    if (this.c.exec?.kind === 'program') return this.say('The active program is running: stop it before loading another one', 'warn');
+    const plan = this.app.importProgramText(text, fileName);
+    if (!plan.length) return this.say('Nothing to paste', 'warn');
+    this.tab.list = 0;
+    this.lp.search = '';
+    this.lp.row = Math.max(0, this.lpFiles().findIndex((f) => f.name === plan[0].name));
+    this.memPtr = 0;
+    this.editCur = { line: 0, word: 0 };
+    this.undo = [];
+    const p = plan[0];
+    this.say(`${p.name}${p.comment ? ' (' + p.comment + ')' : ''} ${p.replaced ? 'updated' : 'stored'} and selected${plan.length > 1 ? ` (+${plan.length - 1} more)` : ''}. Select MEMORY and press CYCLE START`);
+    this.paint();
   }
 
   handleKeyUp(e) {
