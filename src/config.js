@@ -111,6 +111,12 @@ export const DEFAULT_TOOLS = [
   { number: 8, name: 'Chamfer mill Ø12 × 90°', type: 'chamfer', diameter: 12, fluteLength: 8, length: 88, cornerRadius: 0, tipAngle: 90, flutes: 4, wear: 0 },
 ];
 
+// A real machine just runs a program that calls a tool number the simulator has no data for: the
+// control uses the tool geometry in its offsets table (here a generic Ø10 flat end mill, 100 mm long).
+export function genericTool(n) {
+  return { number: n, name: `T${n} (generic Ø10 flat end mill)`, type: 'flat', diameter: 10, fluteLength: 25, length: 100, cornerRadius: 0, tipAngle: 0, flutes: 3, wear: 0, dLength: 0, dRadius: 0, generic: true };
+}
+
 export const DEFAULT_STOCK = { x: 120, y: 80, z: 30, material: 'aluminium', protrusion: 14, zero: 'top-center' };
 
 // Z-map resolution presets (target cell size in mm, capped by node count) and arc chord tolerances.

@@ -1,7 +1,7 @@
 // MillLab: application bootstrap. Wires the interpreter, controller, Z-map, 3D scene, effects, sound
 // and UI together and runs the frame loop.
 import * as THREE from 'three';
-import { PROFILE, MACHINE, MATERIALS, DEFAULT_TOOLS, DEFAULT_STOCK, DEFAULT_SETTINGS, ACCURACY } from './config.js';
+import { PROFILE, MACHINE, MATERIALS, DEFAULT_TOOLS, DEFAULT_STOCK, DEFAULT_SETTINGS, ACCURACY, genericTool } from './config.js';
 import { compileProgram, detectDialect } from './gcode/compile.js';
 import { siemensDefault } from './gcode/siemens.js';
 import { getExample808 } from './gcode/examples808.js';
@@ -142,9 +142,15 @@ class App {
     try { this.drawPendantScreen(); } catch (e) { /* fonts/ui not ready: the first frame redraws */ }
     this.fpsAcc = { n: 0, t: 0 };
     const loop = (now) => {
-      if (!window.__pauseRender) this.frame(now);
-      else this.last = now;
+      // the next frame is always scheduled first: an exception in one frame must never freeze the app
       requestAnimationFrame(loop);
+      if (window.__pauseRender) { this.last = now; return; }
+      try {
+        this.frame(now);
+      } catch (e) {
+        this.last = now;
+        this.reportFrameError(e);
+      }
     };
     requestAnimationFrame(loop);
     this.ui.log('Control ready. REF POINT or AUTO references the machine; select AUTO and press CYCLE START to run the selected program.');
@@ -171,7 +177,12 @@ class App {
   }
 
   refreshCutters() {
-    this.cutters = new Map(this.tools.map((t) => [t.number, makeCutter(t)]));
+    // a tool number that is not in the table (T9, T20 ...) gets a generic Ø10 flat end mill, like the
+    // compiler assumes (config.js genericTool): the program runs and cuts instead of crashing
+    const m = new Map(this.tools.map((t) => [t.number, makeCutter(t)]));
+    const get = m.get.bind(m);
+    m.get = (n) => get(n) || (n > 0 && n <= 200 ? (m.set(n, makeCutter(genericTool(n))), get(n)) : undefined);
+    this.cutters = m;
   }
 
   toolsChanged(rebuildModels = true) {
@@ -682,6 +693,21 @@ class App {
   }
 
   // ------------------------------------------------------------------ frame
+  // A runtime exception becomes a message (and an alarm if a program was running), once per kind.
+  reportFrameError(e) {
+    const msg = String(e?.message || e).slice(0, 160);
+    console.error('frame error', e);
+    if (this._lastFrameErr === msg && performance.now() - (this._lastFrameErrT || 0) < 5000) return;
+    this._lastFrameErr = msg;
+    this._lastFrameErrT = performance.now();
+    try {
+      const c = this.controller;
+      if (c.exec && c.exec.kind === 'program') c.stop?.('Internal error');
+      this.ui.log(`Internal error: ${msg}`, 'error');
+      this.haas?.active && this.haas.say?.(`Internal error: ${msg}`, 'error');
+    } catch { /* nothing more to do */ }
+  }
+
   frame(now) {
     const dt = Math.max(0, Math.min(0.1, (now - this.last) / 1000));
     this.last = now;

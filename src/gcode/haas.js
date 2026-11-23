@@ -17,7 +17,7 @@ import { GError, PLANES } from './interpreter.js';
 import { SiemensInterpreter } from './siemens.js';
 import { CompError } from './crc.js';
 import { cannedHole, cycleNeeds, boltPattern, circPocket, generalPocket } from './haascycles.js';
-import { MACHINE, INCH, atcTime, trapTime } from '../config.js';
+import { MACHINE, INCH, atcTime, trapTime, genericTool } from '../config.js';
 
 const D2R = Math.PI / 180;
 
@@ -797,7 +797,8 @@ export class HaasInterpreter extends SiemensInterpreter {
 
   // ---------------------------------------------------------------- tool data (with G10 / #2001.. overrides)
   toolData(n) {
-    const t = n ? this.opts.tools.get(n) : null;
+    let t = n ? this.opts.tools.get(n) : null;
+    if (!t && n > 0 && n <= 200) t = genericTool(n); // not in the app's table: generic flat end mill
     const ov = this.toolOv.get(n);
     if (!t && !ov) return null;
     return {
@@ -1336,7 +1337,10 @@ export class HaasInterpreter extends SiemensInterpreter {
     }
     if (w1.T) {
       const t = intW('T', 331, 0, 200);
-      if (t !== 0 && !this.opts.tools.get(t)) throw A(331, `T${t} is not in the tool table (empty pocket)`, w1.T);
+      if (t !== 0 && !this.opts.tools.get(t) && !this.genWarned?.has(t)) {
+        (this.genWarned || (this.genWarned = new Set())).add(t);
+        this.warn(`T${t} is not in the tool table: a generic Ø10 flat end mill (length 100) is used`);
+      }
       S.selT = t;
     }
 
