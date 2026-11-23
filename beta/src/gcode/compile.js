@@ -26,7 +26,18 @@ export function compileProgram(text, opts, init = {}) {
   const dialect = opts.forceDialect || detectDialect(text, opts.dialect || 'siemens');
   const modal = init.modal && (init.modal.dialect || 'iso') === dialect ? init.modal : undefined;
   const I = dialect === 'iso' ? new Interpreter(opts) : dialect === 'haas' ? new HaasInterpreter(opts) : new SiemensInterpreter(opts);
-  const res = I.compile(text, { ...init, modal });
+  let res;
+  try {
+    res = I.compile(String(text ?? ''), { ...init, modal });
+  } catch (e) {
+    // No input may crash the app: an internal failure becomes an error on the line being compiled.
+    res = I.res || {};
+    const line = Math.max(0, I.line | 0);
+    const lc = res.lineCount ?? String(text ?? '').split('\n').length;
+    for (const [k, v] of Object.entries({ ops: [], errors: [], warnings: [], lineCount: lc, totalTime: 0, ended: false, toolsUsed: new Set(), lineFirstOp: new Int32Array(lc).fill(-1),
+      tipBounds: null, workBounds: null, feedLength: 0, rapidLength: 0, endState: null, messages: [], dprnt: [], toolOffsetWrites: [] })) if (res[k] === undefined) res[k] = v;
+    res.errors.push({ line, col: 0, len: 0, msg: `Alarm 311 UNKNOWN CODE - internal compiler error (${String(e?.message || e).slice(0, 120)})`, alarm: 311 });
+  }
   res.dialect = dialect;
   return res;
 }

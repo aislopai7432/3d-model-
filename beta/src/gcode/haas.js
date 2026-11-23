@@ -17,7 +17,7 @@ import { GError, PLANES } from './interpreter.js';
 import { SiemensInterpreter } from './siemens.js';
 import { CompError } from './crc.js';
 import { cannedHole, cycleNeeds, boltPattern, circPocket, generalPocket } from './haascycles.js';
-import { MACHINE, INCH, atcTime, trapTime } from '../config.js';
+import { MACHINE, INCH, atcTime, trapTime, genericTool } from '../config.js';
 
 const D2R = Math.PI / 180;
 
@@ -537,7 +537,7 @@ export function parseHaasProgram(text, label = '') {
         started = true;
         continue;
       }
-      if (b.empty && !b.errors.length && b.o == null && b.n == null) continue;
+      if (b.empty && !b.errors.length && b.o == null && b.n == null && !/^MSG\b/i.test(b.comment || '')) continue;
       started = true;
       blocks.push(b);
     }
@@ -637,7 +637,7 @@ export class HaasInterpreter extends SiemensInterpreter {
     S.carousel = init.carousel || 1;
     S.rpmActual = init.rpm || 0;
     const offsets = (this.opts.offsets || []).map((o) => ({ ...o }));
-    while (offsets.length < 6) offsets.push({ x: 0, y: 0, z: 0 });
+    while (offsets.length < 105) offsets.push({ x: 0, y: 0, z: 0 }); // G54-G59 + G110-G129 / G154 P1-P99 (extras start at 0)
     this.offsets = offsets;
     if (S.wcs - 54 >= offsets.length) { S.wcs = 54; S.wcsName = 'G54'; }
     this.vars = new Map();
@@ -671,7 +671,7 @@ export class HaasInterpreter extends SiemensInterpreter {
         res.warnings.push({ line: this.line, msg: 'Cutter compensation still active at the end of the program (G40 missing)' });
         this.flush(false);
       } catch (e) {
-        if (!(e instanceof CompError || e instanceof GError)) throw e;
+        if (!(e instanceof CompError || e instanceof GError)) e = new GError(`Alarm 311 UNKNOWN CODE - internal error (${String(e?.message || e).slice(0, 100)})`);
         res.errors.push({ line: e.line ?? this.line, col: 0, len: 0, msg: this.compMsg(e), alarm: e.alarm ?? null });
       }
     }
@@ -692,7 +692,8 @@ export class HaasInterpreter extends SiemensInterpreter {
     const res = this.res;
     let pc = 0;
     let executed = 0;
-    const MAX = 400000;
+    const MAX = 1000000, MAX_OPS = 1500000;
+    const t0 = Date.now(), BUDGET = this.opts.compileBudgetMs || 20000;
     for (;;) {
       const prog = this.prog;
       if (pc >= prog.blocks.length) {
@@ -713,9 +714,15 @@ export class HaasInterpreter extends SiemensInterpreter {
         if (this.stack.length) this.pushErr(A(322, `${this.progLabel(prog)} reached O${blk.o} without M99`), blk);
         return;
       }
-      if (blk.empty || (blk.blockDelete && this.opts.blockDelete)) { pc++; continue; }
-      if (++executed > MAX) {
-        res.errors.push({ line: this.line, col: 0, len: 0, msg: `Program loop: more than ${MAX} blocks executed. Check the GOTO / WHILE / M99 logic.`, alarm: null });
+      if (blk.blockDelete && this.opts.blockDelete) { pc++; continue; }
+      // (MSG, TEXT): the control shows TEXT as a message while the program runs
+      if (blk.comment && /^MSG\b/i.test(blk.comment)) {
+        const text = blk.comment.replace(/^MSG\s*,?\s*/i, '').trim();
+        if (text) { this.emit({ t: 'msg', text }); this.res.messages.push(text); }
+      }
+      if (blk.empty) { pc++; continue; }
+      if (++executed > MAX || res.ops.length > MAX_OPS || ((executed & 8191) === 0 && Date.now() - t0 > BUDGET)) {
+        res.errors.push({ line: this.line, col: 0, len: 0, msg: `Alarm 1000 PROGRAM LOOP - ${executed > MAX ? `more than ${MAX} blocks executed` : res.ops.length > MAX_OPS ? 'program too large to simulate' : 'simulation time budget exceeded'}. Check the GOTO / WHILE / M99 logic.`, alarm: 1000 });
         return;
       }
       try {
@@ -724,7 +731,8 @@ export class HaasInterpreter extends SiemensInterpreter {
         if (res.ended) return;
         pc = next ?? pc + 1;
       } catch (e) {
-        if (!(e instanceof GError || e instanceof CompError)) throw e;
+        // never let an internal failure escape: it becomes an alarm on this line
+        if (!(e instanceof GError || e instanceof CompError)) e = new GError(`Alarm 311 UNKNOWN CODE - internal error (${String(e?.message || e).slice(0, 100)})`);
         this.pushErr(e, blk);
         return;
       }
@@ -797,7 +805,8 @@ export class HaasInterpreter extends SiemensInterpreter {
 
   // ---------------------------------------------------------------- tool data (with G10 / #2001.. overrides)
   toolData(n) {
-    const t = n ? this.opts.tools.get(n) : null;
+    let t = n ? this.opts.tools.get(n) : null;
+    if (!t && n > 0 && n <= 200) t = genericTool(n); // not in the app's table: generic flat end mill
     const ov = this.toolOv.get(n);
     if (!t && !ov) return null;
     return {
@@ -903,6 +912,10 @@ export class HaasInterpreter extends SiemensInterpreter {
 
   // ---------------------------------------------------------------- motion API (P space), used by the cycles
   pMove(rapid, p, feed = 0) {
+    if (!rapid && this.opts.requireG43 && this.S.tool && this.S.tlo === 49 && !this.noG43Warned) {
+      this.noG43Warned = true;
+      this.warn(`T${this.S.tool} is in the spindle but no tool length offset is active (G43 H${String(this.S.tool).padStart(2, '0')} is missing): the program is positioned with a tool length of 0`);
+    }
     const P = { ...this.curP(), ...p };
     const Q = this.toQ(P);
     const c = this.pp;
@@ -1091,7 +1104,7 @@ export class HaasInterpreter extends SiemensInterpreter {
         const o = this.offsets[target];
         if (!o) throw A(331, `work offset ${target < 6 ? g2(54 + target) : 'G154 P' + (target - 5)} is not available (this machine has ${this.offsets.length} work offsets)`);
         o[k] = v;
-        this.emit({ t: 'offset', index: target, x: o.x, y: o.y, z: o.z });
+        if (target < 6) this.emit({ t: 'offset', index: target, x: o.x, y: o.y, z: o.z });
         this.syncPP();
       },
     };
@@ -1336,7 +1349,10 @@ export class HaasInterpreter extends SiemensInterpreter {
     }
     if (w1.T) {
       const t = intW('T', 331, 0, 200);
-      if (t !== 0 && !this.opts.tools.get(t)) throw A(331, `T${t} is not in the tool table (empty pocket)`, w1.T);
+      if (t !== 0 && !this.opts.tools.get(t) && !this.genWarned?.has(t)) {
+        (this.genWarned || (this.genWarned = new Set())).add(t);
+        this.warn(`T${t} is not in the tool table: a generic Ø10 flat end mill (length 100) is used`);
+      }
       S.selT = t;
     }
 
@@ -1670,7 +1686,7 @@ export class HaasInterpreter extends SiemensInterpreter {
       const o = this.offsets[idx];
       if (!o) throw A(331, `G154 P${P} is not available: the offset table of this machine has ${this.offsets.length} work offsets`, w1.P);
       for (const a of ['X', 'Y', 'Z']) if (w1[a]) { const k = a.toLowerCase(); o[k] = (add ? o[k] : 0) + dim(a); }
-      this.emit({ t: 'offset', index: idx, x: o.x, y: o.y, z: o.z });
+      if (idx < 6) this.emit({ t: 'offset', index: idx, x: o.x, y: o.y, z: o.z });
       this.syncPP();
       return;
     }

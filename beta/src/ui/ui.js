@@ -329,6 +329,7 @@ export class UI {
     const w = c.modal.wcs === 500 ? 54 : c.modal.wcs;
     const i = w - 54;
     const o = app.offsets[i];
+    if (!o) return this.log(`The active work offset G${w} is not in the 808D/NGC offset table: select G54-G59`, 'warn');
     const tool = app.tools.find((t) => t.number === c.tool);
     if (axis === 'z') o.z = r3(c.pos.z - (tool ? tool.length + (tool.dLength || 0) : 0));
     else o[axis] = r3(c.pos[axis]);
@@ -474,6 +475,12 @@ export class UI {
     if (file.size > 25 * 1024 * 1024) return this.log('File is larger than 25 MB', 'error');
     const r = new FileReader();
     r.onload = () => {
+      if (this.app.haas?.active) {
+        // NGC-style control: the file becomes Onnnnn program(s) in memory
+        this.app.importProgramText(String(r.result), file.name);
+        $('#fileInput').value = '';
+        return;
+      }
       const store = this.app.programs;
       let name = normName(file.name);
       if (!validName(name)) name = store.uniqueName('IMPORTED');
