@@ -121,7 +121,7 @@ r = comp(H('G00 G90 G54\nT3 M06\nM08\nT4 M06\nM30'));
 const cool = r.ops.filter((o) => o.t === 'coolant');
 ok(cool.length === 2 && !cool[1].flood && r.ops.filter((o) => o.t === 'tool').length === 2, 'M06 turns the coolant off');
 r = comp(H('G00 G90 G54\nT9 M06\nM30'));
-ok(errNum(r) === 331, `T not in the tool table -> ${r.errors[0]?.msg}`);
+ok(!r.errors.length && r.warnings.some((w) => /T9 is not in the tool table: a generic/.test(w.msg)) && r.endTool === 9, `T9 not in the tool table: generic end mill + warning (a real machine just runs) -> ${r.errors[0]?.msg}`);
 r = comp(H('G00 G90 G54\nG81 Z-5. R2. F100. L0\nT3 M06\nM30'));
 ok(errNum(r) === 372, `tool change in canned cycle -> ${r.errors[0]?.msg}`);
 
@@ -240,7 +240,7 @@ ok(!r.errors.length && r.ops.some((o) => o.t === 'offset' && o.index === 1) && n
 r = comp(H('G10 L10 P2 R110.\nG00 G90 G54 G43 H02 Z0\nM30'));
 ok(near(moves(r).pop().pts.at(-1), OFF.z + 110) && r.res === undefined && r.toolOffsetWrites[0].length === 110, 'G10 L10 sets the length geometry used by G43');
 r = comp(H(SAFE + 'G154 P1\nM30'));
-ok(errNum(r) === 331, `G154 P1 with 6 offsets -> ${r.errors[0]?.msg}`);
+ok(!r.errors.length, `G154 P1 beyond the 6 stored offsets is a zero offset (G10 L20 sets it in the program) -> ${r.errors[0]?.msg}`);
 r = comp(H('G154 P1 G00 G43 H02 X0 Y0 Z0\nM30'), { offsets: [...offsets, { x: -10, y: -20, z: -300 }] });
 ok(!r.errors.length && near(moves(r).pop().pts[3], -10) && r.endState.wcsName === 'G154 P1', 'G154 P1 uses offset 7 when the table has it');
 r = comp(H(SAFE + 'G52 X10. Y5.\nG00 X0 Y0\nM30'));

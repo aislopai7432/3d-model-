@@ -25,7 +25,8 @@ import { Game } from './game/game.js';
 import { applyZMapState, zmapFromState } from './game/partstore.js';
 import { HaasControl, haasDialect } from './ui/haas/haas.js';
 import { makeProgramLookup } from './gcode/haas.js';
-import { getExampleHaas } from './gcode/examples-haas.js';
+import { getExampleHaas, EXAMPLES_HAAS } from './gcode/examples-haas.js';
+import { planImport, looksSiemens } from './ui/importer.js';
 
 const STORE = 'milllab.v1';
 const $ = (s) => document.querySelector(s);
@@ -113,6 +114,7 @@ class App {
     } else this.rebuildStock();
     c.offsets = this.offsets;
 
+    if (this.settings.control !== '808d') this.seedHaasMemory();
     const cur = this.programs.current && this.programs.has(this.programs.current) ? this.programs.current : null;
     if (cur) this.openProgram(cur);
     else if (this.settings.control !== '808d') this.loadExampleHaas('haas-part');
@@ -288,8 +290,7 @@ class App {
   // G-code; older Siemens-mode programs (cycles, ";" comments, R parameters) still compile as before.
   defaultDialect(text) {
     if (!this.haas?.active) return this.settings.dialect;
-    const sie = /^\s*;|\b(CYCLE\d+|POCKET[34]|MCALL|SLOT[12]|LONGHOLE|HOLES[12]|MSG\s*\(|G500|GOTO[FB]|SUPA|TRANS|AROT)\b|\bR\d+\s*=|\bD\d+\b/m;
-    return sie.test(text.slice(0, 20000)) ? 'siemens' : haasDialect();
+    return looksSiemens(text) ? 'siemens' : haasDialect();
   }
 
   saveVars() {
@@ -310,7 +311,22 @@ class App {
     this.ui.log(`Tool offsets written by the program: ${[...new Set(list.map((w) => 'T' + w.tool))].join(' ')}`);
   }
 
+  // Compiling never throws into the UI: an internal failure becomes an error on the program.
   compile() {
+    try {
+      return this.compileNow();
+    } catch (e) {
+      console.error('compile failed', e);
+      const res = compileProgram('', this.compileOpts(), {});
+      res.errors.push({ line: 0, col: 0, len: 0, msg: `Alarm 311 UNKNOWN CODE - the program could not be processed (${String(e?.message || e).slice(0, 100)})`, alarm: 311 });
+      this.compiled = res;
+      if (!this.controller.exec || this.controller.exec.kind !== 'program') this.controller.program = res;
+      try { this.ui.showDiagnostics(res); } catch { /* ignore */ }
+      return res;
+    }
+  }
+
+  compileNow() {
     const c = this.controller;
     const text = this.ui.editor.getValue();
     const t0 = performance.now();
@@ -331,6 +347,16 @@ class App {
 
   // MDA blocks continue from the current modal state of the channel.
   compileMDA(text) {
+    try {
+      return this.compileMDANow(text);
+    } catch (e) {
+      const res = compileProgram('', this.compileOpts(), {});
+      res.errors.push({ line: 0, col: 0, len: 0, msg: `Alarm 311 UNKNOWN CODE - ${String(e?.message || e).slice(0, 100)}`, alarm: 311 });
+      return res;
+    }
+  }
+
+  compileMDANow(text) {
     const c = this.controller;
     const modal = { ...c.modal };
     delete modal.tloLen;
@@ -385,8 +411,8 @@ class App {
     this.ui.editor.setValue(text);
     const ex = this.programs.info(name)?.example;
     if (ex && !this._exampleBlankLoaded && !this.game?.manualBlanks) {
-      const e = getExample808(ex);
-      if (e) {
+      const e = ex.startsWith('haas:') ? getExampleHaas(ex.slice(5)) : getExample808(ex);
+      if (e?.stock) {
         this.stock = { ...this.stock, ...e.stock };
         this.rebuildStock();
         this.setZeroFromStock('top-center', 0, true);
@@ -419,6 +445,40 @@ class App {
       this.ui.log(`${ex.file}: ${ex.name}. Opened as a program only. ${this.game.blankMessage()} (This example expects a ${st.x} × ${st.y} × ${st.z} mm ${MATERIALS[st.material].short.toLowerCase()} blank with G54 at its top centre.)`, 'warn');
       this.game.ui.toast(`${ex.file} opened as a program only: the blank in the vise was not changed.`, 'warn', 5000);
     } else if (!initial) this.ui.log(`${ex.file}: ${ex.name}. Blank ${ex.stock.x} × ${ex.stock.y} × ${ex.stock.z} mm ${MATERIALS[ex.stock.material].short}, G54 at the top centre.`);
+  }
+
+  // Text from the clipboard, a file or a drop: one Onnnnn.MPF per program in the text (see ui/importer.js).
+  // Returns the list of stored programs ([] when nothing was stored).
+  importProgramText(text, fileName = '', open = true) {
+    if (this.controller.exec) { this.ui.log('Stop the running program before loading another one', 'warn'); return []; }
+    text = String(text ?? '');
+    if (text.length > 40 * 1024 * 1024) { this.ui.log('The program is larger than 40 MB', 'error'); return []; }
+    let plan;
+    try {
+      plan = planImport(text, this.programs, fileName);
+    } catch (e) {
+      this.ui.log(`Could not read the program text (${String(e?.message || e).slice(0, 80)})`, 'error');
+      return [];
+    }
+    if (!plan.length) { this.ui.log('Nothing to load: the text is empty', 'warn'); return []; }
+    for (const p of plan) if (!p.same) this.programs.put(p.name, p.text);
+    if (open) this.openProgram(plan[0].name);
+    const res = this.compiled;
+    for (const p of plan) {
+      const n = p.text.split('\n').length - 1;
+      this.ui.log(`${p.replaced ? 'Updated' : 'Stored'} ${p.name}${p.comment ? ' (' + p.comment + ')' : ''}: ${n} lines${p.notes.length ? '. ' + p.notes.join('; ') : ''}`);
+    }
+    if (open && res) this.ui.log(`${plan[0].name}: ${res.errors.length ? res.errors.length + ' error(s), first: line ' + (res.errors[0].line + 1) + ' ' + res.errors[0].msg : 'compiled without errors'}${res.warnings?.length ? ', ' + res.warnings.length + ' warning(s)' : ''}`, res.errors.length ? 'warn' : 'info');
+    return plan;
+  }
+
+  // The NGC-style control's memory holds real Haas programs (O40010..O40060, the examples of the USB
+  // stick) from the start; programs the user already has are never touched.
+  seedHaasMemory() {
+    for (const ex of EXAMPLES_HAAS) {
+      const name = ex.file.replace(/\.NC$/i, '.MPF');
+      if (!this.programs.has(name)) this.programs.put(name, ex.code, { example: 'haas:' + ex.id });
+    }
   }
 
   // A Haas example from the control's USB stick: into memory as Onnnnn.MPF, with its blank and G54
@@ -500,6 +560,7 @@ class App {
       this.effects.setTool(t || null);
     });
     c.on('offset', (i, v) => {
+      if (!this.offsets[i]) return;
       Object.assign(this.offsets[i], v);
       this.ui.renderOffsets();
       this.ui.log(`G10: G${54 + i} = X${round3(v.x)} Y${round3(v.y)} Z${round3(v.z)}`);
