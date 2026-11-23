@@ -285,7 +285,7 @@ export class MachineModel {
     // column foot, and it is 860 wide so the X rails carry the table carriages over the full X travel.
     this.bx(-430, 752, -200, 430, 846, 200, M.cast, S, 12);
     this.bx(-436, 770, -180, 436, 828, 180, M.castDark, S, 6);
-    for (const x of [-250, 250]) for (const z of [-110, 110]) this.bx(x - 38, 718, z - 50, x + 38, 754, z + 50, M.rail, S, 3);
+    for (const x of [-250, 250]) for (const z of [-62, 62]) this.bx(x - 38, 718, z - 36, x + 38, 754, z + 36, M.rail, S, 3);
     this.bx(-55, 696, -60, 55, 752, 60, M.castDark, S, 6);
     // X rails
     for (const z of [-95, 95]) {
@@ -321,7 +321,7 @@ export class MachineModel {
         side.position.set((s * w) / 2, -21, 0);
         g.add(side);
       }
-      const lip = new THREE.Mesh(new THREE.BoxGeometry(w + 4, 8, 6), this.M.paintDark);
+      const lip = new THREE.Mesh(new THREE.BoxGeometry(w + 7, 8, 6), this.M.paintDark);
       lip.position.set(0, 2, (dir * segLen) / 2);
       g.add(lip);
       g.userData.y = 766 - k * 5;
@@ -378,11 +378,12 @@ export class MachineModel {
     geo.rotateY(Math.PI / 2);
     geo.translate(-tb.length / 2, TT - H, 0);
     Tg.add(new THREE.Mesh(geo, M.table));
-    this.bx(-tb.length / 2 + 20, 870, -hw + 20, tb.length / 2 - 20, TT - H, hw - 20, M.cast, Tg);
+    this.bx(-tb.length / 2 + 20, 874, -hw + 20, tb.length / 2 - 20, TT - H, hw - 20, M.cast, Tg);
     // carriages sit near the middle so they stay on the X rails (x +-430) at both ends of the travel
-    for (const x of [-150, 150]) for (const z of [-95, 95]) this.bx(x - 50, 856, z - 34, x + 50, 878, z + 34, M.rail, Tg, 3);
+    for (const x of [-150, 150]) for (const z of [-95, 95]) this.bx(x - 50, 856, z - 34, x + 50, 880, z + 34, M.rail, Tg, 3);
     this.bx(-40, 849, -30, 40, 871, 30, M.castDark, Tg, 3);
-    for (const s of [-1, 1]) this.bx(s * (tb.length / 2) - 4, 870, -hw, s * (tb.length / 2) + 4, TT + 4, hw, M.paintDark, Tg);
+    // end plates sit against the table ends (not overlapping them) and stay just below the top face
+    for (const s of [-1, 1]) this.bx(s > 0 ? tb.length / 2 : -tb.length / 2 - 8, 876, -hw + 1, s > 0 ? tb.length / 2 + 8 : -tb.length / 2, TT - 2, hw - 1, M.paintDark, Tg);
     this.workGroup = new THREE.Group();
     this.workGroup.name = 'work';
     this.workGroup.position.y = TT;
@@ -988,7 +989,7 @@ export class MachineModel {
     this.zScrew.userData.spin.rotation.y = ang(headZ);
     // way covers: front from base front edge to saddle front, rear from column to saddle back
     const sz = this.saddle.position.z;
-    this.layoutCover(this.frontCover, 424, sz + 200);
+    this.layoutCover(this.frontCover, 418, sz + 200);
     this.layoutCover(this.rearCover, COLZ + 4, sz - 200);
     // doors
     for (const d of this.doors) d.position.x = d.userData.closedX + (d.userData.openX - d.userData.closedX) * (s.door || 0);
