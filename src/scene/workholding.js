@@ -43,7 +43,7 @@ export function buildVise(place) {
   const g = new THREE.Group();
   g.name = 'vise';
   const W = place.width;
-  const fl = VISE.floor, jt = place.jawTop, jw = VISE.jawWidth / 2, th = VISE.jawThickness;
+  const fl = VISE.floor, jt = place.jawTop, jw = Math.min(VISE.jawWidth / 2, 68), th = VISE.jawThickness;
   const boxes = [];
   const add = (name, x0, y0, z0, x1, y1, z1, mat, round) => {
     tbox(g, x0, y0, z0, x1, y1, z1, mat, round);
@@ -64,7 +64,8 @@ export function buildVise(place) {
   if (place.bottom > fl + 0.5) {
     for (const s of [-1, 1]) {
       const yc = s * (W / 2 - 7);
-      add(null, -68, yc - 2.5, fl, 68, yc + 2.5, place.bottom, m.parallel);
+      const hl = Math.min(68, place.lx / 2 - 2);
+      add(null, -hl, yc - 2.5, fl, hl, yc + 2.5, place.bottom, m.parallel);
     }
   }
   // long acme screw and crank out of the front of the vise (-Y is the front, +Z in three.js)
@@ -84,7 +85,7 @@ export function buildVise(place) {
   // clamps holding the vise to the T-slots
   for (const s of [-1, 1]) {
     add(null, s * 85, -40, 0, s * 85 + s * 34, 40, 14, m.dark);
-    const bolt = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 40, 6), m.dark);
+    const bolt = new THREE.Mesh(new THREE.CylinderGeometry(6.5, 6.5, 40, 6), m.dark);
     bolt.position.set(s * 100, 20, 0);
     g.add(bolt);
   }
