@@ -795,7 +795,6 @@ for (const e of EXAMPLES_HAAS) {
   const mem = Object.fromEntries(p.map((x) => [x.name, x.text]));
   const q = compile(p[0].text, { programLookup: makeProgramLookup({ names: () => Object.keys(mem), get: (k) => mem[k] }) });
   // a file holding the main program plus its subprograms is split into one program per O number
-  const joined = p.map((x) => x.text).join('').replace(/%\n%\n/g, '');
   if (!(p.length >= 1 && !q.errors.length && q.dialect === 'haas' && (p.length > 1 || p[0].text === e.code))) check(false, `Haas example ${e.file} survives a CRLF paste: ${first(q)} (${p.length} programs)`);
 }
 check(true, `all ${EXAMPLES_HAAS.length} Haas examples survive a CRLF paste unchanged`);
