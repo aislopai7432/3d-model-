@@ -1043,10 +1043,16 @@ function nextFrame() {
   return new Promise((r) => requestAnimationFrame(() => r()));
 }
 
-const app = new App();
-app.init().catch((e) => {
+const failed = (e) => {
   console.error(e);
   const el = document.getElementById('loadingText');
   if (el) el.textContent = 'Failed to start: ' + e.message;
-});
+};
+if (PROFILE.id === 'lathe') {
+  // the manual lathe is a separate app (no G-code control): first-person shop + operator panel
+  import('./lathe/lathe-app.js').then((m) => m.startLathe()).catch(failed);
+} else {
+  const app = new App();
+  app.init().catch(failed);
+}
 

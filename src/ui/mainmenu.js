@@ -13,7 +13,10 @@ const ENTRIES = [
     id: 'vmc560', machine: 'vmc560', control: '808d', title: 'VMC-560 · 808D control',
     sub: 'The original full-size VMC in its enclosure, with the SINUMERIK 808D-style panel, programGUIDE cycle forms and Siemens G-code.',
   },
-  { id: 'lathe', title: 'Manual lathe', sub: 'Coming later.', disabled: true },
+  {
+    id: 'lathe', machine: 'lathe', title: 'Manual engine lathe', tag: 'New',
+    sub: 'A toolroom engine lathe worked by hand: handwheels with graduated dials, power feed, screw-cutting, tailstock drilling, parting off, turned-part jobs and inspection.',
+  },
 ];
 
 const css = `
@@ -106,7 +109,8 @@ function show(app) {
       // another machine profile: remember it (+ its control) and reload; the saved game stays
       try {
         localStorage.setItem('milllab.machine', e.machine);
-        sessionStorage.setItem('milllab.pendingControl', e.control);
+        if (e.control) sessionStorage.setItem('milllab.pendingControl', e.control);
+        else sessionStorage.removeItem('milllab.pendingControl');
         sessionStorage.setItem('milllab.skipMenu', '1');
       } catch { /* storage blocked */ }
       const u = new URL(location.href);
@@ -184,8 +188,16 @@ function show(app) {
     const buildEntry = async (i) => {
       const e = ENTRIES[i];
       let obj;
-      if (e.id === 'lathe') obj = ghostLathe(THREE);
-      else {
+      if (e.id === 'lathe') {
+        let L = null;
+        try { ({ LatheModel: L } = await import('../lathe/lathe-model.js')); } catch (err) { console.warn('menu lathe preview', err); }
+        if (!openMenu) return;
+        if (L) {
+          const m = new L();
+          m.update({ chuck: { dia: 40 }, carriageZ: 160, crossX: 40, tailstock: { z: 520, quill: 20, tool: { type: 'centre', d: 5 } } });
+          obj = m.root;
+        } else obj = ghostLathe(THREE);
+      } else {
         if (!T) { const { createTextures } = await import('../scene/textures.js'); T = createTextures(); }
         if (!openMenu) return;
         let M;
@@ -258,7 +270,7 @@ function show(app) {
 
 // applies the control (NGC / 808D) as soon as the app is ready
 function applyControl(control) {
-  if (!control) return;
+  if (!control || control === 'undefined' || PROFILE.id === 'lathe') return;
   const apply = () => {
     const a = window.__app;
     if (!a?.haas || !a.settings) return setTimeout(apply, 200);
@@ -300,5 +312,5 @@ try {
   if (pc) applyControl(pc);
 } catch { /* storage blocked */ }
 if (!q.has('capture') && !q.has('nomenu') && !skip) show(null);
-const wait = () => (window.__app?.haas && window.__app.settings ? startMenu(window.__app) : setTimeout(wait, 200));
+const wait = () => (window.__app?.settings && (window.__app.haas || window.__app.lathe) ? startMenu(window.__app) : setTimeout(wait, 200));
 wait();

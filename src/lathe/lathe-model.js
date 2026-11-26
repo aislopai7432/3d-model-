@@ -649,16 +649,15 @@ export class LatheModel {
       this.bx(0, 18, -62, 16, 34, -18, M.toolSteel, g, 1);
       tri([[0, -69], [16, -58], [16, -52], [0, -52]], M.toolSteel, 30, 4);
       tri([[0, -69], [11, -62], [0, -57]], M.carbide, 34, 4);
-    } else if (i === 1) { // facing / 45 degree chamfer tool, angled head
-      this.bx(0, 18, -50, 16, 34, -18, M.toolSteel, g, 1);
-      const head = this.bx(-9, 18, -78, 9, 34, -50, M.toolSteel, g, 1);
-      head.position.set(8, 26, -58);
-      head.rotation.y = -Math.PI / 4;
-      tri([[0, -68], [-12, -56], [6, -56]], M.carbide, 34, 4);
+    } else if (i === 1) { // 45 degree chamfer / facing tool: 90 degree V point centred on the tip
+      this.bx(-8, 18, -50, 8, 34, -18, M.toolSteel, g, 1);
+      tri([[0, -67], [-9, -58], [-9, -50], [9, -50], [9, -58]], M.toolSteel, 18, 16);
+      tri([[0, -69], [-8, -61], [8, -61]], M.carbide, 34, 4);
     } else if (i === 2) { // 3 mm parting blade in a holder
       this.bx(-12, 18, -46, 12, 34, -18, M.toolSteel, g, 1);
-      this.bx(-1.5, 14, -TIP_REACH, 1.5, 38, -40, M.steel, g);
-      this.bx(-3, 36, -TIP_REACH, 3, 38.6, -TIP_REACH + 6, M.carbide, g);
+      // blade 0..3 mm on the tailstock side of the tip: the reference is the chuck-side corner
+      this.bx(0, 14, -TIP_REACH + 0.5, 3, 37, -40, M.steel, g);
+      this.bx(-0.05, 34, -TIP_REACH, 3.05, 37.2, -TIP_REACH + 6, M.carbide, g);
     } else { // 60 degree threading tool
       this.bx(-8, 18, -52, 8, 34, -18, M.toolSteel, g, 1);
       tri([[0, -69], [9, -52], [-9, -52]], M.carbide, 34, 4);
@@ -755,7 +754,9 @@ export class LatheModel {
     if (typeof sp.angle === 'number') ang = sp.angle;
     else if (typeof s.spindleAngle === 'number') ang = s.spindleAngle;
     else { this._spin = (this._spin + clamp(w * dt, -0.8, 0.8)) % (Math.PI * 2); ang = this._spin; }
-    this.spinGroup.rotation.x = -ang;
+    // FWD (angle growing) turns the work so its operator-side surface moves DOWN onto the tool's top rake
+    // (counter-clockwise seen from the tailstock): +angle about +X
+    this.spinGroup.rotation.x = ang;
     this.spinAngle = ang;
     // chuck jaws
     const dia = clamp(num(s.chuck && s.chuck.dia, 40), 0, 200);

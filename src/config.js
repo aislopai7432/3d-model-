@@ -10,11 +10,13 @@
 //   The stock, vise, Z-map and toolpath are all expressed in this frame because they ride on the table.
 // Three.js world: +X right, +Y up, +Z towards the operator. Table frame (x, y, z) -> local (x, z, -y).
 
-// Machine profile, chosen once at page load: ?machine=minimill|vmc560, else localStorage 'milllab.machine',
+// Machine profile, chosen once at page load: ?machine=minimill|vmc560|lathe, else localStorage 'milllab.machine',
 // else the Mini Mill. Switching machines stores the id and reloads the page.
 export const PROFILES = {
   minimill: { id: 'minimill', model: 'Mini Mill', maxRpm: 12000 },
   vmc560: { id: 'vmc560', model: 'VMC-560', maxRpm: 10000 },
+  // manual engine lathe: its own app (src/lathe/lathe-app.js) instead of the VMC simulator
+  lathe: { id: 'lathe', model: 'Engine lathe', maxRpm: 2000, manual: true },
 };
 function pickProfile() {
   let id = null;

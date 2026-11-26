@@ -482,6 +482,7 @@ export function buildWorkshop(opts = {}) {
   }
   // anti-fatigue mats: in front of the VMC (replaces the one in machine.js 'floor'), lathe, bench
   if (PROFILE.id === 'vmc560') B.box('floor', M.rubber, -750, 0, 940, 750, 14, 1700);
+  else if (PROFILE.id === 'lathe') B.box('floor', M.rubber, -900, 0, 330, 700, 14, 1050);
   else B.box('floor', M.rubber, -700, 0, 880, 800, 14, 1650);
   B.box('floor', M.rubber, -6700, 0, -3950, -4700, 12, -3350);
   B.box('floor', M.rubber, -1500, 0, -4150, 600, 12, -3600);
@@ -1325,6 +1326,8 @@ export function buildWorkshop(opts = {}) {
       { minX: 1050, maxX: 2010, minZ: -530, maxZ: -70 }, // chip conveyor + bin
       { minX: 760, maxX: 1220, minZ: 880, maxZ: 1080 }, // pendant arm / control panel
     );
+  } else if (PROFILE.id === 'lathe') {
+    // the engine lathe at the origin: the lathe app adds LATHE_COLLIDERS (lathe-model.js)
   } else {
     B.colliders.push(
       { minX: -940, maxX: 800, minZ: -1260, maxZ: 660 }, // Mini Mill cabinet, rear cabinet, coolant tank

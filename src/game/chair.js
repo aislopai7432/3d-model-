@@ -2,8 +2,10 @@
 // key (or E again) stands you back up. Self-contained: hooks into the game's interactables at start-up.
 import * as THREE from 'three';
 
-const POS = new THREE.Vector3(650, 0, 1750); // on the operator side, clear of the doors and the pendant
-const YAW = Math.atan2(POS.x, POS.z); // facing the machine (yaw 0 looks toward -Z)
+// on the operator side, clear of the doors and the pendant; the app can move it (window.__app.chairPos,
+// e.g. the manual lathe puts it beside the tailstock end)
+let POS = new THREE.Vector3(650, 0, 1750);
+let YAW = Math.atan2(POS.x, POS.z); // facing the machine (yaw 0 looks toward -Z)
 const SEAT_EYE = 1180;
 
 function buildChair() {
@@ -42,6 +44,11 @@ function buildChair() {
 
 function start(app) {
   const game = app.game;
+  if (app.chairPos) {
+    POS = new THREE.Vector3(app.chairPos.x, 0, app.chairPos.z);
+    const lk = app.chairLook || { x: 0, z: 0 };
+    YAW = Math.atan2(POS.x - lk.x, POS.z - lk.z);
+  }
   const fp = game.fp;
   const chair = buildChair();
   app.viewer.scene.add(chair);
