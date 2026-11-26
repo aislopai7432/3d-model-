@@ -195,7 +195,10 @@ function show(app) {
         if (L) {
           const m = new L();
           m.update({ chuck: { dia: 40 }, carriageZ: 160, crossX: 40, tailstock: { z: 520, quill: 20, tool: { type: 'centre', d: 5 } } });
-          obj = m.root;
+          // the lathe is much lower than the mills: shown a size up so it fills its slot like they do
+          m.root.scale.setScalar(1.6);
+          obj = new THREE.Group();
+          obj.add(m.root);
         } else obj = ghostLathe(THREE);
       } else {
         if (!T) { const { createTextures } = await import('../scene/textures.js'); T = createTextures(); }

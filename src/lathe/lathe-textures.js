@@ -59,6 +59,27 @@ export function dialTexture(div = 100, labelEvery = 10, tickStep = 1) {
   return mk(c, { repeat: true });
 }
 
+// Thread-dial face (seen from above): N numbered marks; mark m sits (m-1)/N of a turn from the bottom of
+// the canvas (the operator side, where the fixed index is), going toward the canvas right.
+export function threadDialTexture(N = 4) {
+  const S = 256, c = cv(S, S), g = c.getContext('2d'), m = S / 2;
+  g.fillStyle = '#c9ced3';
+  g.beginPath(); g.arc(m, m, m - 2, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#e9ecef';
+  g.beginPath(); g.arc(m, m, m - 16, 0, Math.PI * 2); g.fill();
+  g.strokeStyle = '#15171a'; g.fillStyle = '#15171a';
+  g.font = '700 40px Arial, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  for (let k = 0; k < N; k++) {
+    const t = (k / N) * Math.PI * 2, sx = Math.sin(t), sy = Math.cos(t);
+    g.lineWidth = 7;
+    g.beginPath(); g.moveTo(m + sx * (m - 4), m + sy * (m - 4)); g.lineTo(m + sx * (m - 34), m + sy * (m - 34)); g.stroke();
+    g.fillText(String(k + 1), m + sx * (m - 64), m + sy * (m - 64));
+  }
+  g.fillStyle = '#2a2f34';
+  g.beginPath(); g.arc(m, m, 18, 0, Math.PI * 2); g.fill();
+  return mk(c);
+}
+
 // Swivel scale: ring on a square canvas, 0 at the bottom (toward the operator), +angle to the right.
 export function angleRingTexture() {
   const S = 512;

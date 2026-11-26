@@ -47,6 +47,10 @@ body.lt-op .lt-opbar { display: flex; }
 .lt-b.fwd.on { border-color: #34c77b; background: linear-gradient(#1f5a3a, #17432c); color: #b6f5d2; }
 .lt-b.rev.on { border-color: #f09a3e; background: linear-gradient(#5a3a1f, #432c17); color: #ffd2a3; }
 .lt-b.stop { color: #ffb0b0; }
+.lt-b.pend { border-color: #ffc440; border-style: dashed; color: #ffe39a; }
+.lt-td { align-items: center; gap: 8px; flex-wrap: nowrap; }
+.lt-td canvas { width: 64px; height: 64px; flex: none; }
+.lt-td .lt-small { white-space: normal; line-height: 1.35; }
 .lt-b.warn.on { border-color: var(--err); background: linear-gradient(#5a2222, #431818); color: #ffc0c0; }
 .lt-val { min-width: 84px; padding: 0 8px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; background: #0e1114; border: 1px solid #333b44; font: 600 13px var(--f-mono); color: #9fe3ff; }
 .lt-val.w { min-width: 104px; }
@@ -82,11 +86,31 @@ body.lt-op .lt-opbar { display: flex; }
 body.lt-op .lt-tut ~ * {}
 body.lt-op .g-hud.g-op .g-toasts { left: calc((100% - var(--lts, 270px)) / 2); top: 50px; width: min(560px, calc(100% - var(--lts, 270px) - 24px)); min-width: 0; }
 @media (max-width: 1100px) { .lt-hw { width: 132px; } .lt-hw canvas { width: 112px; height: 112px; } }
+.lt-side-x { display: none; }
 @media (max-width: 820px) {
-  .lt-panel { grid-template-columns: 1fr; grid-template-rows: 26px auto auto; height: auto; max-height: 52vh; overflow-y: auto; }
-  .lt-side { top: auto; bottom: 0; height: 40vh; width: 100%; display: none !important; }
+  /* status / spindle + DRO side by side / the four handwheels in one row (two rows on phones) */
+  .lt-panel { grid-template-columns: minmax(0, auto) minmax(0, 1fr); grid-template-rows: 26px auto auto; grid-template-areas: "st st" "sp dro" "wh wh"; gap: 0 10px; height: auto; max-height: 58vh; overflow-y: auto; padding-bottom: 6px; }
+  .lt-panel > .lt-status { grid-area: st; }
+  .lt-panel > .lt-sp { grid-area: sp; }
+  .lt-panel > .lt-wheels { grid-area: wh; flex-wrap: wrap; justify-content: center; gap: 6px; padding-top: 6px; overflow: visible; }
+  .lt-panel > .lt-drog { grid-area: dro; }
+  .lt-panel .lt-grp { min-width: 0 !important; }
+  .lt-hw { width: calc(25% - 6px); min-width: 128px; max-width: 150px; }
+  .lt-hw canvas { width: 100px; height: 100px; }
+  .lt-hw .ft .lt-val { min-width: 56px; }
+  .lt-b.big { min-width: 50px; height: 36px; }
+  .lt-dro { min-width: 0; }
+  .lt-dro .ax b { font-size: 17px; }
+  .lt-status #ltCut { display: none; }
+  .lt-side { top: auto; bottom: 0; height: min(60vh, 520px); width: 100%; display: none !important; border-left: 0; border-top: 1px solid #3e464f; box-shadow: 0 -10px 30px rgba(0,0,0,.45); }
   body.lt-op.lt-side-open .lt-side { display: flex !important; z-index: 32; }
+  .lt-side-x { display: flex; position: sticky; top: 0; z-index: 1; justify-content: space-between; align-items: center; padding: 2px 0 6px; background: #20252a; font: 700 11px var(--f-cond); letter-spacing: .14em; text-transform: uppercase; color: #8f9aa6; }
   .lt-opbar { right: 12px; }
+}
+@media (max-width: 560px) {
+  .lt-panel { grid-template-columns: minmax(0, 1fr); grid-template-areas: "st" "sp" "dro" "wh"; max-height: 62vh; }
+  .lt-hw { width: calc(50% - 6px); max-width: none; }
+  .lt-opbar .ttl { display: none; }
 }
 `;
 
@@ -110,7 +134,7 @@ export class LathePanel {
     p.className = 'lt-panel';
     p.innerHTML = `
       <div class="lt-status"><span class="al" id="ltAlarm" hidden></span><span class="msg" id="ltMsg">—</span><span id="ltCut" class="lt-small"></span><span class="lt-small">LOAD</span><div class="lt-load"><i id="ltLoad"></i></div></div>
-      <div class="lt-grp" style="min-width:236px">
+      <div class="lt-grp lt-sp" style="min-width:236px">
         <div class="lt-cap">Spindle</div>
         <div class="lt-row"><button class="lt-b big rev" data-a="spindle" data-v="-1" title="Reverse (Shift+Space)">REV</button><button class="lt-b big stop" data-a="spindle" data-v="0" title="Stop (Space)">STOP</button><button class="lt-b big fwd" data-a="spindle" data-v="1" title="Forward (Space)">FWD</button></div>
         <div class="lt-row"><button class="lt-b sq" data-a="gear" data-d="-1" title="Slower (−)">◀</button><span class="lt-val w" id="ltRpm">500 rpm</span><button class="lt-b sq" data-a="gear" data-d="1" title="Faster (+)">▶</button><button class="lt-b" data-a="brake" title="Foot brake">BRAKE</button></div>
@@ -118,7 +142,7 @@ export class LathePanel {
         <div class="lt-row"><button class="lt-b" data-a="step" id="ltStep" title="Divisions per scroll notch / key tap (Tab)">Step 1 div</button><button class="lt-b" data-a="side" id="ltSideBtn" title="More controls">More…</button></div>
       </div>
       <div class="lt-wheels" id="ltWheels"></div>
-      <div class="lt-grp">
+      <div class="lt-grp lt-drog">
         <div class="lt-cap">DRO <button class="lt-b" style="height:20px;font-size:10px;margin-left:6px" data-a="droMode" id="ltDroMode">Ø</button><button class="lt-b" style="height:20px;font-size:10px" data-a="droOn" id="ltDroOn">ON</button></div>
         <div class="lt-dro" id="ltDro">
           <div class="ax"><i id="ltDroXl">XØ</i><b id="ltDroX">0.000</b><button class="lt-b sq" data-a="zeroDro" data-v="x" title="Zero X">0</button></div>
@@ -144,6 +168,7 @@ export class LathePanel {
     const side = document.createElement('div');
     side.className = 'lt-side';
     side.innerHTML = `
+      <div class="lt-side-x"><span>More controls</span><button class="lt-b" data-a="side" title="Close">Close ✕</button></div>
       <div class="lt-grp"><div class="lt-cap">Feed box · power feed</div>
         <div class="lt-row"><button class="lt-b sq" data-a="feedIndex" data-d="-1">◀</button><span class="lt-val w" id="ltFeed">0.10 mm/rev</span><button class="lt-b sq" data-a="feedIndex" data-d="1">▶</button></div>
         <div class="lt-row"><button class="lt-b" data-a="feed" data-v="off">OFF</button><button class="lt-b" data-a="feed" data-v="long" title="Longitudinal power feed (F)">⟷ LONG</button><button class="lt-b" data-a="feed" data-v="cross" title="Cross power feed (Shift+F)">↕ CROSS</button></div>
@@ -151,6 +176,7 @@ export class LathePanel {
       </div>
       <div class="lt-grp"><div class="lt-cap">Screw cutting</div>
         <div class="lt-row"><button class="lt-b sq" data-a="pitch" data-d="-1">◀</button><span class="lt-val w" id="ltPitch">P 1.50</span><button class="lt-b sq" data-a="pitch" data-d="1">▶</button><button class="lt-b" data-a="halfNut" id="ltHalf" title="Half nut (N)">HALF NUT</button></div>
+        <div class="lt-row lt-td"><canvas id="ltTd" width="64" height="64" title="Thread dial: the half nut drops in on a numbered mark"></canvas><div class="lt-small" id="ltTdTxt">Thread dial</div></div>
       </div>
       <div class="lt-grp"><div class="lt-cap">Compound swivel</div>
         <div class="lt-row"><button class="lt-b sq" data-a="compoundAngle" data-d="-5" title="−5° (Shift: −1°)">◀</button><span class="lt-val" id="ltComp">0°</span><button class="lt-b sq" data-a="compoundAngle" data-d="5" title="+5° (Shift: +1°)">▶</button><button class="lt-b" data-a="compoundAngle" data-set="0">0°</button><button class="lt-b" data-a="compoundAngle" data-set="30">30°</button></div>
@@ -223,7 +249,7 @@ export class LathePanel {
       case 'feed': g.act('feed', b.dataset.v); break;
       case 'feedDir': g.act('feedDir', -st.feed.dir); break;
       case 'pitch': g.act('pitch', Math.max(0, Math.min(PITCHES.length - 1, st.threadIndex + d))); break;
-      case 'halfNut': g.act('halfNut', !st.halfNut); break;
+      case 'halfNut': g.act('halfNut', !(st.halfNut || st.halfNutPending)); break;
       case 'compoundAngle': g.act('compoundAngle', b.dataset.set != null ? +b.dataset.set : st.compound.angle + (e.shiftKey ? Math.sign(d) : d)); break;
       case 'tool': g.act('tool', +b.dataset.v); break;
       case 'tailLock': g.act('tailLock', !st.tailstock.locked); break;
@@ -341,6 +367,38 @@ export class LathePanel {
     k.fillText(String(Math.round(D.div) % divN < 0 ? (Math.round(D.div) % divN) + divN : Math.round(D.div) % divN), c, c + 1);
   }
 
+  // thread dial (seen from above, index at the bottom = operator side); text: which marks keep the helix
+  drawThreadDial() {
+    const cv = document.getElementById('ltTd');
+    if (!cv || !cv.offsetParent) return;
+    const td = this.sim.threadDial(), st = this.sim.state;
+    const key = `${td.N}|${td.pos.toFixed(3)}|${st.halfNut}|${st.halfNutPending}`;
+    if (key !== this._tdKey) {
+      this._tdKey = key;
+      const dpr = devicePixelRatio || 1, S = 64;
+      if (cv.width !== S * dpr) { cv.width = S * dpr; cv.height = S * dpr; }
+      const k = cv.getContext('2d');
+      k.setTransform(dpr, 0, 0, dpr, 0, 0);
+      k.clearRect(0, 0, S, S);
+      const c = S / 2, R = 28;
+      k.fillStyle = '#d5d9dd'; k.beginPath(); k.arc(c, c, R, 0, TAU); k.fill();
+      k.strokeStyle = '#15181b'; k.fillStyle = '#15181b'; k.lineWidth = 2;
+      k.font = '700 10px Arial, sans-serif'; k.textAlign = 'center'; k.textBaseline = 'middle';
+      for (let m = 0; m < td.N; m++) {
+        const a = (m / td.N - td.pos) * TAU; // mark m+1 at the index (bottom) when pos = m/N
+        const sx = -Math.sin(a), sy = Math.cos(a);
+        k.beginPath(); k.moveTo(c + sx * R, c + sy * R); k.lineTo(c + sx * (R - 7), c + sy * (R - 7)); k.stroke();
+        k.fillText(String(m + 1), c + sx * (R - 14), c + sy * (R - 14));
+      }
+      k.fillStyle = st.halfNut ? '#34c77b' : '#d0312a';
+      k.beginPath(); k.moveTo(c, S - 1); k.lineTo(c - 5, S - 8); k.lineTo(c + 5, S - 8); k.closePath(); k.fill();
+    }
+    const rule = td.step === 1 ? 'any mark' : td.step === 2 ? 'every other mark (1·3 or 2·4)' : `the same number every pass (${td.N} marks)`;
+    const txt = `P ${st.threadPitch.toFixed(2)}: engage on ${rule}. Under the index: ${td.mark}${st.halfNut ? ' · nut IN' : ''}`;
+    const el = document.getElementById('ltTdTxt');
+    if (el && el.textContent !== txt) el.textContent = txt;
+  }
+
   update(dt) {
     this._t += dt;
     for (const w of Object.values(this.wheels)) this.drawWheel(w);
@@ -391,6 +449,9 @@ export class LathePanel {
     set('ltDir', lng ? (st.feed.dir > 0 ? '↑ cross in' : '↓ cross out') : st.feed.dir > 0 ? '← toward chuck' : '→ toward tailstock');
     set('ltPitch', `P ${st.threadPitch.toFixed(2)}`);
     $('#ltHalf').classList.toggle('on', st.halfNut);
+    $('#ltHalf').classList.toggle('pend', !!st.halfNutPending);
+    set('ltHalf', st.halfNut ? 'HALF NUT IN' : st.halfNutPending ? 'NUT WAITING…' : 'HALF NUT');
+    this.drawThreadDial();
     set('ltComp', `${st.compound.angle.toFixed(0)}°`);
     const tl = $('#ltTail');
     const tid = (() => { const t = st.tailstock.tool; if (!t) return 'none'; return t.type === 'centre' ? 'c5' : 'd' + t.d; })();

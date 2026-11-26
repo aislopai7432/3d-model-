@@ -196,6 +196,46 @@ export class TurnProfile {
     this.version++;
   }
 
+  /** Compact JSON snapshot (run-length encoded arrays) for saving a part-machined bar. */
+  serialize() {
+    const rle = (arr, q) => {
+      const out = [];
+      let prev = null, cnt = 0;
+      for (let i = 0; i < arr.length; i++) {
+        const v = Math.round(arr[i] * q) / q;
+        if (v === prev) cnt++;
+        else { if (cnt) out.push(prev, cnt); prev = v; cnt = 1; }
+      }
+      if (cnt) out.push(prev, cnt);
+      return out;
+    };
+    return {
+      v: 1, zMin: this.zMin, zMax: this.zMax, dz: this.dz, chunkMm: this.chunk * this.dz, radius0: this.radius0,
+      rOut: rle(this.rOut, 1e4), rIn: rle(this.rIn, 1e4), mach: rle(this.mach, 1), machIn: rle(this.machIn, 1),
+      fe: rle(this.fe, 1e3), thr: rle(this.thr, 1e3), threads: this.threads.map((t) => ({ ...t })),
+    };
+  }
+
+  /** Rebuild a profile from serialize(); returns null when the data does not fit. */
+  static deserialize(o) {
+    if (!o || o.v !== 1 || !(o.zMax > o.zMin) || !(o.dz > 0)) return null;
+    const p = new TurnProfile({ zMin: o.zMin, zMax: o.zMax, radius: o.radius0 || 0, dz: o.dz, chunkMm: o.chunkMm || 10 });
+    const unrle = (src, dst) => {
+      if (!Array.isArray(src)) return false;
+      let k = 0;
+      for (let j = 0; j + 1 < src.length; j += 2) for (let c = 0; c < src[j + 1] && k < dst.length; c++) dst[k++] = src[j];
+      return k === dst.length;
+    };
+    if (!unrle(o.rOut, p.rOut) || !unrle(o.rIn, p.rIn)) return null;
+    unrle(o.mach, p.mach); unrle(o.machIn, p.machIn); unrle(o.fe, p.fe); unrle(o.thr, p.thr);
+    p.threads = Array.isArray(o.threads) ? o.threads.map((t) => ({ ...t })) : [];
+    p.hi = p.n - 1;
+    p.acc.i0 = 0; p.acc.i1 = p.n - 1;
+    p.endEdit();
+    p.resetAcc();
+    return p;
+  }
+
   markThread(zc, pitch, hand) {
     const lo = zc - pitch * 1.2, hi = zc + pitch * 1.2;
     for (const t of this.threads) {

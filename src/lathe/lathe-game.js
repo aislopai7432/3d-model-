@@ -83,6 +83,7 @@ export class LatheGame {
     this.tut = new LatheTutorial(this);
     this.fillJobBoard();
     this.bindOpInput();
+    this.restoreMachine();
 
     const pose = this.s.pose && this.validPose(this.s.pose) ? this.s.pose : { pos: [400, 0, 1900], yaw: 0.25, pitch: -0.12 };
     this.fp.enable({ pos: pose.pos, yaw: pose.yaw, pitch: pose.pitch ?? -0.08 });
@@ -103,9 +104,24 @@ export class LatheGame {
   save(now = false) {
     const p = this.fp?.position;
     if (p && !this.op) this.s.pose = { pos: [r3(p.x), 0, r3(p.z)], yaw: this.fp.yaw, pitch: this.fp.pitch };
+    // the machine set-up and the (part-turned) bar in the chuck survive a reload
+    try { this.s.machine = { sim: this.sim.saveState(), barId: this.loaded?.bar?.id || null, machined: !!this.loaded?.machined }; } catch { /* keep the old snapshot */ }
     const write = () => { try { localStorage.setItem(KEY, JSON.stringify(this.s)); } catch { /* storage blocked */ } };
     clearTimeout(this._saveT);
     if (now) write(); else this._saveT = setTimeout(write, 500);
+  }
+  restoreMachine() {
+    const m = this.s.machine;
+    if (!m?.sim) return;
+    if (!this.sim.restoreState(m.sim)) return;
+    this.sim.drainEvents();
+    const st = this.sim.state;
+    if (st.stock) {
+      const bar = BARS.find((b) => b.id === m.barId) || BARS.find((b) => b.dia === st.stock.dia && b.material === st.stock.material) || null;
+      this.loaded = bar ? { bar, machined: !!m.machined } : null;
+      if (this.prog && this.job && bar && barFits(bar, this.job)) this.prog.loaded = true;
+    }
+    this.app.stockChanged();
   }
   validPose(p) {
     if (!p || !Array.isArray(p.pos)) return false;
@@ -599,7 +615,7 @@ export class LatheGame {
     switch (a) {
       case 'spindleLever': this.act('spindle', sh ? -1 : st.spindle.dir ? 0 : 1); break;
       case 'feedLever': this.act('feed', st.feed.engaged !== 'off' ? 'off' : sh ? 'cross' : 'long'); break;
-      case 'halfNut': this.act('halfNut', !st.halfNut); break;
+      case 'halfNut': this.act('halfNut', !(st.halfNut || st.halfNutPending)); break;
       case 'feedDir': this.act('feedDir', -st.feed.dir); break;
       case 'estop': this.act('estop', !st.estop); break;
       case 'speedSelector': this.act('gear', st.gear + (sh ? -1 : 1)); break;
@@ -643,7 +659,7 @@ export class LatheGame {
     else if (code === 'Space') this.act('spindle', st.spindle.dir ? 0 : e.shiftKey ? -1 : 1);
     else if (code === 'KeyF') this.act('feed', st.feed.engaged !== 'off' ? 'off' : e.shiftKey ? 'cross' : 'long');
     else if (code === 'KeyR') this.act('feedDir', -st.feed.dir);
-    else if (code === 'KeyN') this.act('halfNut', !st.halfNut);
+    else if (code === 'KeyN') this.act('halfNut', !(st.halfNut || st.halfNutPending));
     else if (/^Digit[1-4]$/.test(code)) this.act('tool', +code.slice(5) - 1);
     else if (code === 'KeyC') this.act('coolant', !st.coolant);
     else if (code === 'KeyG') this.act('guard', !st.guardOpen);
@@ -736,7 +752,10 @@ export class LatheGame {
     const msg = e.hard ? `CRASH: ${this.sim.state.message}. Reset the alarm, back the tool off and check it.` : this.sim.state.message;
     if (msg) this.ui.toast(msg, 'warn', 5000);
   }
-  onSimEvent(e) { this.tut?.onEvent(e); }
+  onSimEvent(e) {
+    if (e.type === 'halfNutIn') this.ui.toast(e.ok ? `Half nut in on thread-dial mark ${e.mark}.` : this.sim.state.message, e.ok ? 'info' : 'warn', e.ok ? 2200 : 5500);
+    this.tut?.onEvent(e);
+  }
 
   // ------------------------------------------------------------------ frame
   update(dt) {

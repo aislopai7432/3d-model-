@@ -10,7 +10,7 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { dialTexture, angleRingTexture, quillScaleTexture, leadscrewTexture, keywayTexture, plateAtlas } from './lathe-textures.js';
+import { dialTexture, threadDialTexture, angleRingTexture, quillScaleTexture, leadscrewTexture, keywayTexture, plateAtlas } from './lathe-textures.js';
 
 export const CENTER_Y = 1100; // spindle centreline height
 export const CHUCK_FACE_X = -600; // world X of Z0 (chuck jaw face)
@@ -550,6 +550,22 @@ export class LatheModel {
     this.halfNutLever.rotation.z = 0;
     this.pickSphere(this.halfNutLever, 0, 60, 0, 30);
     this.click(this.halfNutLever, 'halfNut');
+    // thread dial on the right of the apron: its worm wheel runs on the leadscrew; the half nut only drops
+    // in on a numbered mark (read at the red index on the operator side)
+    this.bx(150, 868, 150, 196, 932, 196, M.paintDark, c, 3);
+    this.cyl(24, 6, M.chrome, 174, 935, 174, c, 'y', 24);
+    const ti = new THREE.ExtrudeGeometry(new THREE.Shape([new THREE.Vector2(-5, 0), new THREE.Vector2(5, 0), new THREE.Vector2(0, 9)]), { depth: 4, bevelEnabled: false });
+    ti.rotateX(-Math.PI / 2); ti.translate(174, 946, 205); // triangle in the xz plane pointing at the dial
+    c.add(new THREE.Mesh(ti, M.red));
+    this.threadDial = this.group('threadDial', c, 174, 938, 174);
+    this.cyl(22, 12, M.chrome, 0, 6, 0, this.threadDial, 'y', 32);
+    flat(this.threadDial);
+    this.threadDialFace = new THREE.Mesh(new THREE.CircleGeometry(21, 40), new THREE.MeshStandardMaterial({ map: threadDialTexture(4), roughness: 0.4, metalness: 0.3 }));
+    this.threadDialFace.geometry.rotateX(-Math.PI / 2);
+    this.threadDialFace.position.y = 12.3;
+    this.threadDialFace.userData.keep = true;
+    this.threadDial.add(this.threadDialFace);
+    this._tdN = 4;
     // feed direction knob
     this.feedDirKnob = this.group('feedDir', c, 25, 690, 203);
     this.cyl(22, 12, M.black, 0, 0, 6, this.feedDirKnob, 'z', 24);
@@ -873,6 +889,18 @@ export class LatheModel {
       this.stream.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
     } else this.stream.visible = false;
     this.lamp = s.lightOn !== false;
+    // thread dial: N marks (changes with the pitch: a different dial gear), pos = turn fraction
+    const td = s.threadDial;
+    if (td && td.N && this.threadDialFace) {
+      if (td.N !== this._tdN) {
+        this._tdN = td.N;
+        const mat = this.threadDialFace.material;
+        mat.map?.dispose();
+        mat.map = threadDialTexture(td.N);
+        mat.needsUpdate = true;
+      }
+      this.threadDial.rotation.y = -num(td.pos, 0) * Math.PI * 2;
+    }
   }
 
   setTailTool(tool) {

@@ -25,6 +25,9 @@ export const GRAD = {
 };
 export const CHUCK = { outerDia: 160, jawLen: 45, minGrip: 15, maxDia: 80, minDia: 3 };
 export const LIMITS = { z: [-20, 620], x: [-12, 110], s: [-30, 50], q: [0, 100], tail: [60, 700] };
+// Leadscrew pitch (mm). The half nut can only drop into the leadscrew thread once per leadscrew pitch of
+// relative travel: the thread dial (threadDial()) shows those moments as numbered marks.
+export const LEADSCREW_PITCH = 6;
 export const MACHINE = { powerKW: 2.2, maxTorque: 250, handSpeed: { carriage: 3, cross: 1, compound: 0.5, quill: 2 } };
 const E_MOD = { aluminium: 0.69e5, steel: 2.1e5, brass: 1.0e5, plastic: 3e3 }; // N/mm2
 const STEP = 0.02; // mm, sweep substep
@@ -56,6 +59,9 @@ export class LatheSim {
     this.parts = [];
     this.events.length = 0;
     this.dro0 = { x: 0, z: 0 };
+    this.lead = 0; // leadscrew travel (mm): advances -pitch per spindle rev * feed dir, always geared to the spindle
+    this.nutOff = 0; // carriage Z - leadscrew travel while the half nut is closed (a multiple of LEADSCREW_PITCH)
+    this._helix = null; // { pitch, phase } of the first thread pass on this bar
     this._defl = 0;
     this._rubT = 0; this._warnT = 0; this._chipT = 0; this._pkT = 0; this._noCutT = 0;
     this.state = {
@@ -69,7 +75,7 @@ export class LatheSim {
         { type: 'part', broken: false }, { type: 'thread', broken: false },
       ],
       feed: { rate: FEEDS[3], index: 3, engaged: 'off', dir: 1 },
-      halfNut: false, threadPitch: PITCHES[6], threadIndex: 6,
+      halfNut: false, halfNutPending: false, threadPitch: PITCHES[6], threadIndex: 6,
       tailstock: { z: 400, quill: 0, tool: null, locked: true },
       chuck: { dia: 0, outerDia: CHUCK.outerDia, clamped: false },
       stock: null,
@@ -147,13 +153,14 @@ export class LatheSim {
     this.state.chuck.clamped = !!clamp;
     this.state.lastPart = null;
     this._defl = 0;
+    this._helix = null;
     this._ev('stockLoaded', { dia, length, stickout, material });
     this._sync();
     return true;
   }
   removeStock() {
     if (Math.abs(this.state.spindle.w) > 1) return false;
-    this.profile = null; this.state.stock = null; this.state.chuck.clamped = false; this.state.chuck.dia = 0;
+    this.profile = null; this.state.stock = null; this.state.chuck.clamped = false; this.state.chuck.dia = 0; this._helix = null;
     this._sync(); return true;
   }
   clampChuck(on) {
@@ -197,7 +204,7 @@ export class LatheSim {
   setEstop(on) {
     const s = this.state;
     s.estop = !!on;
-    if (on) { s.spindle.dir = 0; s.spindle.brake = true; s.feed.engaged = 'off'; s.halfNut = false; s.alarm = 'ESTOP'; this._ev('estop'); } else { s.spindle.brake = false; if (s.alarm === 'ESTOP') s.alarm = null; }
+    if (on) { s.spindle.dir = 0; s.spindle.brake = true; s.feed.engaged = 'off'; s.halfNut = false; s.halfNutPending = false; s.alarm = 'ESTOP'; this._ev('estop'); } else { s.spindle.brake = false; if (s.alarm === 'ESTOP') s.alarm = null; }
   }
   resetAlarm() {
     const s = this.state;
@@ -222,7 +229,7 @@ export class LatheSim {
   engageFeed(mode) {
     const s = this.state;
     if (mode !== 'off') {
-      if (s.halfNut) { this._msg('Interlock: open the half nut before engaging power feed'); this._ev('interlock'); return false; }
+      if (s.halfNut || s.halfNutPending) { this._msg('Interlock: open the half nut before engaging power feed'); this._ev('interlock'); return false; }
       if (s.estop || s.alarm === 'CRASH') return false;
     }
     s.feed.engaged = mode;
@@ -233,9 +240,55 @@ export class LatheSim {
     const s = this.state;
     if (on && s.feed.engaged !== 'off') { this._msg('Interlock: disengage power feed before closing the half nut'); this._ev('interlock'); return false; }
     if (on && (s.estop || s.alarm === 'CRASH')) return false;
-    s.halfNut = !!on;
     this._ev('lever', { what: 'halfNut', value: !!on });
+    if (!on) { s.halfNut = false; s.halfNutPending = false; return true; }
+    if (s.halfNut) return true;
+    // the nut only drops in where the leadscrew thread lines up with it (a mark on the thread dial)
+    const u = (this.ax.carriage.pos - this.lead) / LEADSCREW_PITCH;
+    if (Math.abs(u - Math.round(u)) < 0.01) this._closeNut(Math.round(u));
+    else s.halfNutPending = true;
     return true;
+  }
+  _closeNut(k) {
+    const s = this.state, P = s.threadPitch;
+    s.halfNut = true; s.halfNutPending = false;
+    this.nutOff = k * LEADSCREW_PITCH;
+    // the helix this pass will cut: groove Z (mod pitch) at whole spindle revolutions
+    const T = this.state.spindle.angle / (2 * Math.PI);
+    const C = this.lead + P * s.feed.dir * T + this.nutOff;
+    const phase = ((C % P) + P) % P;
+    const td = this.threadDial();
+    const mark = td.mark;
+    if (this.profile) {
+      const h = this._helix;
+      if (!h || Math.abs(h.pitch - P) > 1e-9) this._helix = { pitch: P, phase, mark };
+      else {
+        let d = Math.abs(phase - h.phase) % P;
+        d = Math.min(d, P - d);
+        if (d > 0.02) {
+          this._msg(`Half nut in on mark ${mark}: NOT the helix of the first pass (mark ${h.mark}) - the tool will cut a new groove!`);
+          this._ev('crossThread', { mark, first: h.mark, offset: d });
+          this._ev('halfNutIn', { mark, ok: false });
+          return;
+        }
+      }
+    }
+    this._ev('halfNutIn', { mark, ok: true });
+  }
+  /** Thread dial: N numbered marks per dial turn; the half nut drops in only on a mark. pos = dial turn
+   *  fraction (0..1, mark m at (m-1)/N), mark = nearest mark, step = marks between equivalent marks (1 = any
+   *  mark cuts the same helix, 2 = odd or even marks, N = the same mark every pass). */
+  threadDial() {
+    const P = this.state.threadPitch;
+    const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+    const p100 = Math.round(P * 100), l100 = LEADSCREW_PITCH * 100;
+    const L = (p100 * l100) / gcd(p100, l100) / 100; // shortest travel after which nut and helix line up again
+    const Ld = L * Math.max(1, Math.ceil(24 / L));
+    const N = Math.round(Ld / LEADSCREW_PITCH);
+    const rel = this.state.halfNut ? this.nutOff : this.ax.carriage.pos - this.lead;
+    const pos = (((rel / Ld) % 1) + 1) % 1;
+    const m = Math.round(pos * N) % N;
+    return { N, pos, mark: m + 1, near: Math.abs(pos * N - Math.round(pos * N)), step: Math.round(L / LEADSCREW_PITCH), travel: Ld };
   }
   setCompoundAngle(deg) { this.state.compound.angle = clamp(deg, -90, 90); this._ev('lever', { what: 'compoundAngle', value: this.state.compound.angle }); }
   setTool(i, type) { this.state.tools[i] = { type, broken: false }; }
@@ -263,6 +316,7 @@ export class LatheSim {
   // ------------------------------------------------------------ handwheels
   _hand(axis, deltaDiv) {
     const g = GRAD[axis], a = this.ax[axis], v = AXIS_VAR[axis];
+    if (axis === 'carriage' && this.state.halfNut) { this._msg('Half nut closed: the carriage is locked to the leadscrew'); return false; }
     a.hw += g.sign * deltaDiv * g.unit;
     // backlash: slide only follows once the lost motion is taken up
     let p = a.pos;
@@ -305,7 +359,7 @@ export class LatheSim {
     this._ev('crash', { what, hard, z, x });
     if (hard) {
       sp.dir = 0; sp.brake = true;
-      st.feed.engaged = 'off'; st.halfNut = false;
+      st.feed.engaged = 'off'; st.halfNut = false; st.halfNutPending = false;
       st.alarm = 'CRASH';
       if (what === 'tool') this.tool.broken = true;
       this._msg(label + ' - CRASH! Spindle stopped');
@@ -366,7 +420,7 @@ export class LatheSim {
       res.area = prof.acc.area; res.vol = prof.acc.vol; res.depth = prof.acc.depth;
       this._after(prof, mode);
     }
-    if (res.limited && kind !== 'hand') { st.feed.engaged = 'off'; st.halfNut = false; this._msg('Travel limit reached - feed disengaged'); }
+    if (res.limited && kind !== 'hand') { st.feed.engaged = 'off'; st.halfNut = false; st.halfNutPending = false; this._msg('Travel limit reached - feed disengaged'); }
     if (res.limited) this._ev('limit', { axis: res.limited });
     if (res.crashed) this._crash(res.crashed, last.z, last.x, last.s);
     if (kind === 'hand') this._evalCut(res, mode);
@@ -458,7 +512,7 @@ export class LatheSim {
     if (load > 1.6 && !this.tool.broken) { this.tool.broken = true; this._ev('toolBroken', { tool: this.tool.type, load }); this._msg('Tool broke - way too heavy a cut'); }
     if (load > 1.15) {
       if (st.alarm !== 'OVERLOAD') {
-        st.alarm = 'OVERLOAD'; st.spindle.dir = 0; st.spindle.brake = true; st.feed.engaged = 'off'; st.halfNut = false;
+        st.alarm = 'OVERLOAD'; st.spindle.dir = 0; st.spindle.brake = true; st.feed.engaged = 'off'; st.halfNut = false; st.halfNutPending = false;
         this._ev('stall', { load }); this._msg('Spindle stalled - cut too deep or too fast a feed');
       }
     } else if (load > 0.85 && this._warnT <= 0) {
@@ -586,8 +640,23 @@ export class LatheSim {
       this._defl *= Math.exp(-h / 0.08); st.deflection = this._defl;
     }
     if (Math.abs(revs) < 1e-12) return;
-    // ---- power feed / half nut
+    // ---- leadscrew (always geared to the spindle) and the half nut dropping in on a thread-dial mark
     const A = this.ax, dir = st.feed.dir;
+    const lead0 = this.lead;
+    this.lead += -st.threadPitch * revs * dir;
+    let revsLead = revs, tFrac = 0;
+    if (st.halfNutPending) {
+      if (st.estop || st.alarm === 'CRASH') st.halfNutPending = false;
+      else {
+        const u0 = (A.carriage.pos - lead0) / LEADSCREW_PITCH, u1 = (A.carriage.pos - this.lead) / LEADSCREW_PITCH;
+        const k = u1 > u0 ? Math.floor(u0) + 1 : Math.ceil(u0) - 1;
+        if (u1 !== u0 && (u1 > u0 ? k <= u1 : k >= u1)) {
+          tFrac = (k - u0) / (u1 - u0);
+          this._closeNut(k);
+          revsLead = revs * (1 - tFrac);
+        }
+      }
+    }
     let mode = null;
     if (st.halfNut) mode = 'lead'; else if (st.feed.engaged === 'long') mode = 'long'; else if (st.feed.engaged === 'cross') mode = 'cross';
     if (!mode) return;
@@ -598,8 +667,9 @@ export class LatheSim {
       res = this._move({ x: A.cross.pos + dx }, h, 'power');
       A.cross.hw = A.cross.pos + (dx > 0 ? 1 : -1) * A.cross.b / 2;
     } else {
-      const dz = -(mode === 'lead' ? st.threadPitch : st.feed.rate) * revs * dir;
-      const T0 = (sp.angle - revs * 2 * Math.PI) / (2 * Math.PI), T1 = sp.angle / (2 * Math.PI);
+      const r = mode === 'lead' ? revsLead : revs;
+      const dz = mode === 'lead' ? this.lead + this.nutOff - A.carriage.pos : -st.feed.rate * revs * dir;
+      const T0 = (sp.angle - r * 2 * Math.PI) / (2 * Math.PI), T1 = sp.angle / (2 * Math.PI);
       const zOld = A.carriage.pos;
       res = this._move({ z: A.carriage.pos + dz }, h, 'power');
       A.carriage.hw = A.carriage.pos + (dz > 0 ? 1 : -1) * A.carriage.b / 2;
@@ -626,6 +696,64 @@ export class LatheSim {
       const res = { area: a.area, vol: a.vol, depth: a.depth, revs: 1, time: 1 / (Math.abs(st.spindle.w) / 60), feedMark: st.threadPitch };
       this._after(prof, 'lead');
       this._evalCut(res, 'lead');
+    }
+  }
+
+  // ------------------------------------------------------------ save / restore (page reload)
+  /** Plain-JSON snapshot of the machine set-up and the bar in the chuck (the spindle is saved stopped). */
+  saveState() {
+    const st = this.state, ax = {};
+    for (const k of Object.keys(this.ax)) { const a = this.ax[k]; ax[k] = { pos: a.pos, hw: a.hw, zero: a.zero }; }
+    return {
+      v: 1, ax, dro0: { ...this.dro0 }, lead: this.lead, nutOff: this.nutOff,
+      gear: st.gear, toolIndex: st.toolIndex, tools: st.tools.map((t) => ({ type: t.type, broken: !!t.broken })),
+      feed: { index: st.feed.index, dir: st.feed.dir }, threadIndex: st.threadIndex, compoundAngle: st.compound.angle,
+      tailstock: { z: st.tailstock.z, tool: st.tailstock.tool ? { type: st.tailstock.tool.type, d: st.tailstock.tool.d } : null, locked: st.tailstock.locked },
+      coolant: st.coolant, guardOpen: st.guardOpen,
+      stock: st.stock && this.profile ? { dia: st.stock.dia, grip: st.stock.grip, material: st.stock.material, clamped: st.chuck.clamped, profile: this.profile.serialize() } : null,
+      helix: this._helix,
+    };
+  }
+  /** Restore saveState() output; returns false (and leaves a clean machine) when it does not fit. */
+  restoreState(o) {
+    if (!o || o.v !== 1) return false;
+    try {
+      const st = this.state;
+      for (const k of Object.keys(this.ax)) {
+        const a = this.ax[k], v = o.ax?.[k];
+        if (!v || ![v.pos, v.hw, v.zero].every(Number.isFinite)) continue;
+        a.pos = clamp(v.pos, a.lo, a.hi); a.hw = v.hw; a.zero = v.zero;
+      }
+      if (o.dro0) this.dro0 = { x: +o.dro0.x || 0, z: +o.dro0.z || 0 };
+      this.lead = +o.lead || 0; this.nutOff = +o.nutOff || 0;
+      this.setGear(o.gear ?? st.gear);
+      if (Array.isArray(o.tools)) o.tools.forEach((t, i) => { if (st.tools[i] && t?.type) st.tools[i] = { type: t.type, broken: !!t.broken }; });
+      st.toolIndex = ((Math.round(o.toolIndex) || 0) % 4 + 4) % 4;
+      if (o.feed) { this.setFeedIndex(o.feed.index ?? st.feed.index); this.setFeedDir(o.feed.dir ?? 1); }
+      this.setThreadIndex(o.threadIndex ?? st.threadIndex);
+      this.setCompoundAngle(+o.compoundAngle || 0);
+      if (o.tailstock) {
+        st.tailstock.z = clamp(+o.tailstock.z || 400, LIMITS.tail[0], LIMITS.tail[1]);
+        st.tailstock.locked = o.tailstock.locked !== false;
+        this.setTailTool(o.tailstock.tool || null);
+      }
+      st.coolant = !!o.coolant; st.guardOpen = !!o.guardOpen;
+      if (o.stock) {
+        const p = TurnProfile.deserialize(o.stock.profile);
+        if (p && p.endZ() != null) {
+          this.profile = p;
+          this.parts = [];
+          st.stock = { dia: o.stock.dia, length: 0, stickout: 0, grip: o.stock.grip, material: MATERIALS[o.stock.material] ? o.stock.material : 'steel', endZ: p.endZ() };
+          st.chuck.dia = o.stock.dia; st.chuck.clamped = !!o.stock.clamped;
+          this._helix = o.helix || null;
+        }
+      }
+      this.events.length = 0;
+      this._sync();
+      return true;
+    } catch {
+      this.reset();
+      return false;
     }
   }
 

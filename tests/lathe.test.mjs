@@ -376,5 +376,74 @@ ok(FEEDS.length >= 6 && PITCHES.includes(1.5), 'feed and thread-pitch tables pre
   near(p.lengthBetween(2, 7), 5, 0.03, 'lengthBetween');
 }
 
+// ---- thread dial: the half nut drops in only on a dial mark; the same mark keeps the helix
+{
+  const grooves = (pr, a, b) => { const m = []; for (let i = Math.round(pr.idx(a)) + 2; i < Math.round(pr.idx(b)); i++) if (pr.rOut[i] < pr.rOut[i - 1] && pr.rOut[i] <= pr.rOut[i + 1] && pr.rOut[i] < 9.97) m.push(+pr.z(i).toFixed(2)); return m; };
+  const s = mk({ dia: 20, length: 100, stickout: 50, gear: 2 });
+  s.indexTool(3); s.setThreadIndex(PITCHES.indexOf(1.75));
+  const td = s.threadDial();
+  ok(td.N === 7 && td.step === 7, `P1.75 on a 6 mm leadscrew: 7 marks, same mark every pass (N ${td.N}, step ${td.step})`);
+  toZ(s, 53); toR(s, 10.5); s.turnCross(Math.round((10.5 - 9.9) / 0.01));
+  s.drainEvents();
+  s.setHalfNut(true);
+  ok(s.state.halfNutPending || s.state.halfNut, 'half nut lever in: waits for a mark');
+  let n = 0; while (!s.state.halfNut && n++ < 600) s.step(1 / 60);
+  const first = s.threadDial().mark;
+  ok(s.state.halfNut && s.threadDial().near < 1e-6, `nut dropped in exactly on mark ${first}`);
+  ok(!s.turnCarriage(10), 'carriage handwheel locked while the half nut is closed');
+  n = 0; while (s.toolTip().z > 30 && n++ < 60 * 60) s.step(1 / 60);
+  s.setHalfNut(false); toR(s, 12); toZ(s, 53);
+  const g1 = grooves(s.profile, 33, 50);
+  ok(g1.length >= 5, `first pass: ${g1.length} grooves`);
+  // second pass: engage while the dial shows the first mark again
+  toR(s, 9.88);
+  s.drainEvents();
+  n = 0; while (n++ < 60 * 60) { const d = s.threadDial(); const nxt = (d.pos * d.N + 1e-9) % d.N; if (Math.abs(nxt - (first - 1 - 0.3)) < 0.08) break; s.step(1 / 240); }
+  s.setHalfNut(true);
+  n = 0; while (!s.state.halfNut && n++ < 6000) s.step(1 / 240);
+  ok(s.threadDial().mark === first && !types(s).includes('crossThread'), `second pass engaged on mark ${s.threadDial().mark}: same helix`);
+  n = 0; while (s.toolTip().z > 30 && n++ < 60 * 60) s.step(1 / 60);
+  s.setHalfNut(false);
+  const g2 = grooves(s.profile, 33, 50);
+  ok(g2.length === g1.length && g2.every((z, i) => Math.abs(z - g1[i]) < 0.05), 'same mark: grooves deepened in place');
+  // wrong mark: warned (cross-threaded)
+  toR(s, 12); toZ(s, 53); toR(s, 9.87);
+  s.drainEvents();
+  n = 0; while (n++ < 60 * 60) { const d = s.threadDial(); const nxt = (d.pos * d.N + 1e-9) % d.N; if (Math.abs(nxt - (first % 7 - 0.3)) < 0.08) break; s.step(1 / 240); }
+  s.setHalfNut(true);
+  n = 0; while (!s.state.halfNut && n++ < 6000) s.step(1 / 240);
+  ok(s.threadDial().mark !== first && types(s).includes('crossThread'), `engaging on mark ${s.threadDial().mark} instead of ${first} is flagged as cross-threading`);
+  s.setHalfNut(false);
+  // pitches that divide the leadscrew pitch: any mark
+  s.setThreadIndex(PITCHES.indexOf(1.5));
+  ok(s.threadDial().step === 1 && s.threadDial().N === 4, 'P1.5: 4 marks, any mark');
+}
+
+// ---- profile save / restore
+{
+  const s = mk({ dia: 30, stickout: 50 });
+  toZ(s, 52); toR(s, 14); toZ(s, 20); toR(s, 16);
+  const o = JSON.parse(JSON.stringify(s.profile.serialize()));
+  const p2 = TurnProfile.deserialize(o);
+  ok(p2 && p2.n === s.profile.n && Math.abs(p2.measureOD(30) - s.profile.measureOD(30)) < 1e-3 && Math.abs(p2.endZ() - s.profile.endZ()) < 1e-6, 'turned profile survives serialize/deserialize');
+  ok(JSON.stringify(o).length < 4000, `serialized profile is compact (${JSON.stringify(o).length} chars)`);
+}
+
+// ---- machine state save / restore
+{
+  const s = mk({ dia: 30, stickout: 50 });
+  toZ(s, 52); toR(s, 14); toZ(s, 20); toR(s, 16); s.zeroDial('cross'); s.turnCross(30);
+  s.setSpindle(0); s.setBrake(true); s.runFor(3);
+  s.setThreadIndex(PITCHES.indexOf(1.75)); toR(s, 30); s.indexTool(2);
+  const snap = JSON.parse(JSON.stringify(s.saveState()));
+  const t = new LatheSim();
+  ok(t.restoreState(snap), 'restoreState accepts a snapshot');
+  near(t.measureOD(30), s.measureOD(30), 1e-3, 'restored bar keeps its turned diameter');
+  ok(Math.abs(t.toolTip().z - s.toolTip().z) < 1e-9 && Math.abs(t.toolTip().r - s.toolTip().r) < 1e-9, 'tool position restored');
+  ok(t.dial('cross').div === s.dial('cross').div && t.state.toolIndex === 2 && t.state.threadPitch === 1.75 && t.state.chuck.clamped, 'dial collar, tool, pitch and chuck restored');
+  ok(t.setSpindle(1), 'restored machine starts');
+  ok(!new LatheSim().restoreState({ v: 9 }), 'unknown snapshot rejected');
+}
+
 console.log(bad ? `${bad} lathe check(s) failed` : 'lathe: all checks passed');
 process.exitCode = bad ? 1 : 0;

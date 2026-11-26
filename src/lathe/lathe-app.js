@@ -220,12 +220,13 @@ export class LatheApp {
       toolIndex: v.tool,
       tailstock: { z: s.tailstock.z + tailLen, quill: s.tailstock.quill, tool: s.tailstock.tool, locked: s.tailstock.locked, quillLock: false },
       gear: s.gear, speeds: s.speeds,
-      feed: s.feed, halfNut: s.halfNut, threadPitch: s.threadPitch,
+      feed: s.feed, halfNut: s.halfNut || s.halfNutPending, threadPitch: s.threadPitch,
       // clockwise from the operator = negative rotation about the wheel's outward axis
       handwheels: { carriage: -turns('carriage') * TAU, cross: -turns('cross') * TAU, compound: -turns('compound') * TAU, tail: -turns('quill') * TAU },
       dials: { carriage: dialOff('carriage'), cross: dialOff('cross'), compound: dialOff('compound'), tail: dialOff('quill') },
       guardOpen: v.guard, estop: s.estop, coolant: s.coolant, brake: s.spindle.brake ? 1 : 0,
       lightOn: v.light,
+      threadDial: sim.threadDial(),
     });
     if (m.M.lamp.emissiveIntensity !== (v.light ? 1.4 : 0)) m.M.lamp.emissiveIntensity = v.light ? 1.4 : 0;
     this.workLight.visible = v.light;
