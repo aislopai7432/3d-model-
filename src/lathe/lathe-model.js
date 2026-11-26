@@ -552,19 +552,21 @@ export class LatheModel {
     this.click(this.hwCross.group, 'crossWheel');
     this.plate('cross', 50, c, -20, 940, 262);
     // hose to the coolant nozzle (flexible, drawn static) and nozzle
-    const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(115, 976, -70), new THREE.Vector3(120, 1090, -70), new THREE.Vector3(85, 1170, 0), new THREE.Vector3(35, 1160, 80), new THREE.Vector3(10, 1135, 125)]);
+    // hose runs up behind the work and the nozzle points down at the tip from the back (keeps the
+    // operator's view of the cut clear)
+    const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(115, 976, -110), new THREE.Vector3(112, 1060, -122), new THREE.Vector3(85, 1140, -100), new THREE.Vector3(48, 1152, -62), new THREE.Vector3(34, 1146, -46)]);
     const hose = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 7, 8), M.black);
     c.add(hose);
     this.nozzle = new THREE.Object3D();
-    this.nozzle.position.set(10, 1133, 128);
+    this.nozzle.position.set(26, 1136, -34);
     c.add(this.nozzle);
-    this.cyl(8, 24, M.chrome, 10, 1128, 134, c, 'y', 10).rotation.x = -0.9;
+    this.cyl(7, 22, M.chrome, 30, 1141, -40, c, 'y', 10).rotation.x = 0.9;
     flat(c);
     this.stream = new THREE.Mesh(new THREE.CylinderGeometry(2, 3, 1, 8, 1, true), M.coolantMat);
     this.stream.visible = false;
     this.stream.userData.noShadow = true;
     this.root.add(this.stream);
-    this.pickSphere(c, 10, 1135, 135, 22).userData.action = 'coolant';
+    this.pickSphere(c, 30, 1141, -40, 22).userData.action = 'coolant';
     // ---- cross slide (tip frame: x 0, tool tip at z 0)
     this.cross = this.group('crossSlide', c, -20, 0, 0);
     const x = this.cross;
@@ -718,18 +720,20 @@ export class LatheModel {
     const M = this.M;
     const g = this.group('extras', this.root);
     // gooseneck work light on the headstock top
-    const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(-700, 1272, 120), new THREE.Vector3(-690, 1400, 150), new THREE.Vector3(-640, 1470, 200), new THREE.Vector3(-560, 1440, 260)]);
+    // gooseneck from the back of the headstock lid, lamp over the chuck from behind (out of the
+    // operator's line of sight to the cut)
+    const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(-730, 1272, -100), new THREE.Vector3(-722, 1345, -140), new THREE.Vector3(-685, 1385, -185), new THREE.Vector3(-628, 1372, -205)]);
     g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 6, 8), M.black));
-    this.cyl(16, 12, M.black, -700, 1274, 120, g, 'y', 16);
-    const head = this.cyl(34, 56, M.paint, -540, 1415, 275, g, 'y', 24, 24);
-    head.rotation.set(-0.6, 0, -0.3);
-    this.cyl(30, 3, M.lamp, -548, 1392, 268, g, 'y', 24).rotation.set(-0.6, 0, -0.3);
+    this.cyl(16, 12, M.black, -730, 1274, -100, g, 'y', 16);
+    const head = this.cyl(34, 56, M.paint, -606, 1352, -200, g, 'y', 24, 24);
+    head.rotation.set(0.75, 0, -0.45);
+    this.cyl(30, 3, M.lamp, -614, 1332, -184, g, 'y', 24).rotation.set(0.75, 0, -0.45);
     this.bx(-1000, 1100, -150, -985, 1110, -140, M.black, g); // dummy cable gland
     this.plate('warnGlasses', 55, g, -930, 1225, 162.6);
     flat(g);
     // work light pick
     this.lightPick = this.group('light', this.root);
-    this.pickSphere(this.lightPick, -545, 1410, 270, 55);
+    this.pickSphere(this.lightPick, -608, 1350, -196, 55);
     this.click(this.lightPick, 'light');
   }
 

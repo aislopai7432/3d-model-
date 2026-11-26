@@ -77,7 +77,7 @@ function makeL01({ d1 = 24, d2 = 28, chamfer = true, faceZ = 59.5 } = {}) {
   const { ev } = makeL01({ d1: 24.4, chamfer: false });
   const rep = J.inspectTurned(J.getLatheJob('L01'), { profile: ev.piece.profile, material: 'aluminium' });
   const od = rep.items.find((i) => i.id === 'od0'), ch = rep.items.find((i) => i.id === 'ch');
-  ok(!rep.pass && rep.grade === 'FAIL', 'oversize spigot fails');
+  ok(!rep.pass && rep.grade === 'FAIL', 'oversize spigot is rejected');
   ok(od && !od.pass && od.dev > 0.3, `Ø24 reads oversize (${od?.measured})`);
   ok(ch && !ch.pass, 'missing chamfer is reported');
   ok(rep.notes.some((n) => /pass/i.test(n)), 'note suggests another pass');
@@ -87,7 +87,7 @@ function makeL01({ d1 = 24, d2 = 28, chamfer = true, faceZ = 59.5 } = {}) {
   const p = new TurnProfile({ zMin: 0, zMax: 40, radius: 15, dz: 0.02 });
   const rep = J.inspectTurned(J.getLatheJob('L01'), { profile: p, material: 'aluminium' });
   ok(!rep.pass && rep.items.filter((i) => !i.pass).length >= 3, 'raw bar fails the inspection');
-  ok(J.inspectTurned(J.getLatheJob('L01'), { profile: null }).grade === 'FAIL', 'no part = FAIL');
+  ok(J.inspectTurned(J.getLatheJob('L01'), { profile: null }).grade === 'FAIL', 'no part gets the failing grade');
 }
 {
   // L02: drilled through bore + OD, made directly on a profile (the drilling itself is tested in lathe.test)
@@ -117,4 +117,91 @@ function makeL01({ d1 = 24, d2 = 28, chamfer = true, faceZ = 59.5 } = {}) {
 }
 
 console.log(bad ? `${bad} lathe job check(s) failed` : 'all lathe job checks passed');
+process.exitCode = bad ? 1 : 0;
+
+// ---- L04: screw-cut M16x2 stud, made the way a player would (half nut kept closed, spindle reversed to go back)
+{
+  const s = new LatheSim();
+  s.setTool(1, 'chamfer');
+  s.loadStock({ dia: 25, length: 100, stickout: 60, material: 'aluminium' });
+  s.setGear(9); s.setSpindle(1); s.runFor(3);
+  const F = 59.5, Z = (u) => F - u;
+  toR(s, 14); toZ(s, F); toR(s, -0.5); toR(s, 14);
+  for (const r of [12, 11]) { toZ(s, F + 2); toR(s, r); toZ(s, Z(48)); toR(s, 14); }
+  for (const r of [10, 9, 8, 7.95]) { toZ(s, F + 2); toR(s, r); toZ(s, Z(20)); toR(s, 14); }
+  toZ(s, F + 25); s.indexTool(2); toZ(s, Z(23)); toR(s, 6.5); toR(s, 14);
+  toZ(s, F + 25); s.indexTool(1); toZ(s, F); toR(s, 7.95 - 1.5); toR(s, 14);
+  toZ(s, F + 25); s.indexTool(3);
+  s.setSpindle(0); s.setBrake(true); s.runFor(2); s.setBrake(false);
+  s.setGear(3); s.setThreadIndex(8); // 125 rpm, P2.0
+  toZ(s, F + 4); toR(s, 7.8);
+  s.setSpindle(1); s.runFor(1.5);
+  ok(s.setHalfNut(true), 'half nut closes');
+  for (let pass = 0, r = 7.8; pass < 12; pass++) {
+    let n = 0; while (s.toolTip().z > Z(21.5) && n++ < 60 * 60) s.step(1 / 60);
+    toR(s, 9.5); // back out, reverse to the start with the half nut still closed
+    s.setSpindle(0); s.setBrake(true); s.runFor(1.5); s.setBrake(false);
+    s.setSpindle(-1); n = 0; while (s.toolTip().z < F + 4 && n++ < 60 * 60) s.step(1 / 60);
+    s.setSpindle(0); s.setBrake(true); s.runFor(1.5); s.setBrake(false);
+    if (r <= 6.775 + 1e-6) break;
+    r = Math.max(6.775, r - 0.15);
+    toR(s, r);
+    s.setSpindle(1); s.runFor(0.4);
+  }
+  s.setHalfNut(false);
+  toR(s, 14); toZ(s, F + 25); s.indexTool(2);
+  s.setGear(9); s.setSpindle(1); s.runFor(2);
+  toZ(s, Z(48)); toR(s, 13);
+  s.setFeedIndex(1); s.engageFeed('cross');
+  let n = 0; while (!s.events.some((e) => e.type === 'partedOff') && n++ < 60 * 90) s.step(1 / 60);
+  const ev = s.events.find((e) => e.type === 'partedOff');
+  ok(!!ev, 'L04 parted off');
+  if (ev) {
+    const rep = J.inspectTurned(J.getLatheJob('L04'), { profile: ev.piece.profile, material: 'aluminium' });
+    for (const it of rep.items) ok(it.pass, `L04 ${it.label}: ${it.measured}${it.extra ? ' (' + it.extra + ')' : ''}`);
+    near(J.readInstrument(J.pieceFrame(ev.piece.profile), 'pitch', 8).value, 2, 1e-9, 'pitch gauge reads 2.0 on the thread');
+  }
+}
+
+// ---- the guided tutorial's step checks follow a real L01 run (fake game shell around a real sim)
+{
+  const { LATHE_TUTORIAL } = await import(R + 'lathe-tutorial.js');
+  const sim = new LatheSim();
+  sim.setTool(1, 'chamfer');
+  sim.setGuard(true);
+  const g = { s: { jobId: null }, carry: null, sim, op: null, pieces: [], plate: null, mlog: [], prog: null };
+  const ctx = {};
+  let i = 0;
+  const advance = () => { while (LATHE_TUTORIAL[i] && LATHE_TUTORIAL[i].check(g, ctx)) { i++; if (LATHE_TUTORIAL[i]?.id === 'face') ctx.stick0 = sim.state.stock?.stickout ?? null; } return LATHE_TUTORIAL[i]?.id; };
+  ok(advance() === 'job', 'tutorial starts at the job board');
+  g.s.jobId = 'L01'; ok(advance() === 'bar', 'accepting L01 moves on to the bar');
+  g.carry = { kind: 'bar', bar: J.BARS.find((b) => J.barFits(b, J.getLatheJob('L01'))) };
+  ok(advance() === 'load', 'the right bar moves on to chucking');
+  sim.loadStock({ dia: 30, length: 100, stickout: 60, material: 'aluminium' }); g.carry = null;
+  g.op = 'lathe';
+  ok(advance() === 'guard', 'chucked + operator position: close the guard');
+  sim.setGuard(false); sim.setGear(9);
+  ok(advance() === 'start', 'guard shut and ~1000 rpm selected: start the spindle');
+  sim.setSpindle(1); sim.runFor(2.5);
+  ok(advance() === 'face', 'spindle running: face the end');
+  toR(sim, 17); toZ(sim, 59.5); toR(sim, -0.5); toR(sim, 17);
+  ok(advance() === 'zero', 'faced: touch off and zero');
+  ctx.zeroed = true;
+  ok(advance() === 'rough', 'zeroed: rough the Ø28');
+  toZ(sim, 61.5); toR(sim, 14); toZ(sim, 15); toR(sim, 17);
+  ok(advance() === 'turn', 'Ø28 done: the Ø24 spigot');
+  for (const r of [13, 12]) { toZ(sim, 61.5); toR(sim, r); toZ(sim, 37.5); toR(sim, 17); }
+  ok(advance() === 'chamfer', 'Ø24 done: chamfer');
+  toZ(sim, 85); sim.indexTool(1); toZ(sim, 59.5); toR(sim, 11); toR(sim, 17);
+  ok(advance() === 'part', 'chamfered: part off');
+  g.pieces.push({});
+  ok(advance() === 'pick', 'parted: pick it up');
+  g.pieces = []; g.carry = { kind: 'part' };
+  ok(advance() === 'inspect', 'in hand: inspect');
+  g.carry = null; g.plate = {};
+  ok(advance() === 'measure', 'on the plate: measure');
+  g.mlog.push({ tool: 'mic' });
+  ok(advance() === undefined, 'micrometer reading completes the tutorial');
+}
+console.log(bad ? `${bad} lathe tutorial/job check(s) failed` : 'all lathe tutorial checks passed');
 process.exitCode = bad ? 1 : 0;

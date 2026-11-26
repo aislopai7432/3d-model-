@@ -163,6 +163,7 @@ export function jobChecks(job) {
   for (let k = 0; k < job.segs.length - 1; k++) {
     const a = job.segs[k], b = job.segs[k + 1];
     if (Math.abs(a.d - b.d) < 0.3) continue;
+    if (job.thread && k === 0) continue; // the thread runs out into its relief: no measurable shoulder face
     C.push({ id: 'sh' + k, kind: 'shoulder', label: `Shoulder at ${a.u1} from face (Ø${a.d} | Ø${b.d})`, nominal: a.u1, tol: [-GEN_TOL, GEN_TOL], da: a.d, db: b.d });
   }
   if (job.chamfer) C.push({ id: 'ch', kind: 'chamfer', label: `Chamfer ${job.chamfer}×45° at the face`, nominal: job.chamfer, tol: job.thread ? [-0.3, job.thread.pitch] : [-0.3, 0.3], d: job.segs[0].d });
