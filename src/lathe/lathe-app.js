@@ -68,7 +68,7 @@ export class LatheApp {
 
     // the work light on its gooseneck really lights the work (toggle: LIGHT)
     this.workLight = new THREE.SpotLight(0xfff0d8, 0.9, 1600, 0.55, 0.6, 0);
-    this.workLight.position.set(-612, 1336, -186);
+    this.workLight.position.set(-660, 1430, -262);
     this.workLight.target.position.set(-520, 1100, 20);
     this.viewer.scene.add(this.workLight, this.workLight.target);
 

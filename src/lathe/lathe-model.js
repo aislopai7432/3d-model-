@@ -102,7 +102,10 @@ export class LatheModel {
       carbide: std({ color: 0xc9a43a, roughness: 0.3, metalness: 0.8 }),
       toolSteel: std({ color: 0x6c737a, roughness: 0.35, metalness: 0.85 }),
       green: std({ color: 0x1f9a4a, roughness: 0.35, metalness: 0.1 }),
-      dial: std({ color: 0xffffff, map: dialTexture(), roughness: 0.4, metalness: 0.6, side: THREE.DoubleSide }),
+      // one dial per handwheel, graduated like the panel dials (lathe-sim GRAD)
+      dial: std({ color: 0xffffff, map: dialTexture(100, 10), roughness: 0.4, metalness: 0.6, side: THREE.DoubleSide }),
+      dialCarriage: std({ color: 0xffffff, map: dialTexture(250, 25, 2), roughness: 0.4, metalness: 0.6, side: THREE.DoubleSide }),
+      dialCross: std({ color: 0xffffff, map: dialTexture(200, 20), roughness: 0.4, metalness: 0.6, side: THREE.DoubleSide }),
       ring: std({ color: 0xffffff, map: angleRingTexture(), roughness: 0.4, metalness: 0.5, transparent: true, alphaTest: 0.3 }),
       plate: std({ color: 0xffffff, map: atlas.texture, roughness: 0.5, metalness: 0.2, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
       quill: std({ color: 0xffffff, map: quillScaleTexture(), roughness: 0.3, metalness: 0.85 }),
@@ -195,12 +198,12 @@ export class LatheModel {
   }
 
   // Handwheel with chrome rim, black spokes, spinner handle and a graduated dial. Axis = local +z.
-  handwheel(parent, name, x, y, z, { r = 85, dialR = 46, handle = true, hubR = 22, spokes = 3 } = {}) {
+  handwheel(parent, name, x, y, z, { r = 85, dialR = 46, handle = true, hubR = 22, spokes = 3, dialMat = null } = {}) {
     const M = this.M;
     const g = this.group(name, parent, x, y, z);
     const dial = this.group(name + '-dial', g, 0, 0, 34);
     // graduated cone band
-    const band = new THREE.Mesh(new THREE.CylinderGeometry(dialR - 9, dialR, 16, 48, 1, true), M.dial);
+    const band = new THREE.Mesh(new THREE.CylinderGeometry(dialR - 9, dialR, 16, 64, 1, true), dialMat || M.dial);
     band.geometry.rotateX(Math.PI / 2);
     band.position.z = 8;
     dial.add(band);
@@ -230,6 +233,15 @@ export class LatheModel {
     }
     this.pickSphere(g, 0, 0, zW, r + 8);
     flat(g);
+    // fixed index: a stationary collar behind the dial with a red pointer at the top (12 o'clock)
+    const ix = this.group(name + '-index', parent, x, y, z);
+    const col = new THREE.Mesh(new THREE.TorusGeometry(dialR + 2.5, 2.2, 6, 48), M.paintDark);
+    col.position.z = 33;
+    ix.add(col);
+    const ptr = new THREE.ExtrudeGeometry(new THREE.Shape([new THREE.Vector2(-4.5, dialR + 3), new THREE.Vector2(4.5, dialR + 3), new THREE.Vector2(0, dialR - 4)]), { depth: 8, bevelEnabled: false });
+    ptr.translate(0, 0, 29);
+    ix.add(new THREE.Mesh(ptr, M.red));
+    flat(ix);
     return { group: g, dial };
   }
 
@@ -429,23 +441,27 @@ export class LatheModel {
     // hinged chuck guard: half-shell about the spindle axis; opens by rotating up and back
     this.guard = this.group('guard', this.root, 0, CENTER_Y, 0);
     const g = this.guard;
-    const R = 188, x0 = -690, x1 = -490;
-    const shell = new THREE.Mesh(new THREE.CylinderGeometry(R, R, x1 - x0, 40, 1, true, -Math.PI * 0.2, Math.PI * 1.1), M.glass);
+    // it covers the chuck only (ends just past the jaw face) and does not hang down in front of the work,
+    // so the operator still sees the cut; light, thin edge bands instead of heavy black rims
+    const R = 168, x0 = -700, x1 = -584, a0 = -Math.PI * 0.08, span = Math.PI * 1.08;
+    const shell = new THREE.Mesh(new THREE.CylinderGeometry(R, R, x1 - x0, 40, 1, true, a0, span), M.glass);
     shell.geometry.rotateZ(Math.PI / 2); // axis along x; theta 0 = front (+z), 90 deg = up
     shell.position.set((x0 + x1) / 2, 0, 0);
     g.add(shell);
     for (const x of [x0, x1]) {
-      const tg = new THREE.TorusGeometry(R, 4, 8, 40, Math.PI * 1.1);
-      tg.rotateZ(Math.PI * 0.1);
-      const ring = new THREE.Mesh(tg, M.black);
-      ring.rotation.y = Math.PI / 2;
+      const tg = new THREE.TorusGeometry(R, 2.2, 6, 40, span);
+      tg.rotateZ(a0);
+      const ring = new THREE.Mesh(tg, M.paintDark);
+      ring.rotation.y = -Math.PI / 2;
       ring.position.set(x, 0, 0);
       g.add(ring);
     }
-    this.bx(x0, 150, -R - 8, x1, 200, -R + 12, M.black, g, 3); // hinge block at the rear
-    this.cyl(7, 130, M.chrome, (x0 + x1) / 2, -112, 152, g, 'x', 10); // front handle
+    this.bx(x0, 140, -R - 8, x1, 190, -R + 12, M.black, g, 3); // hinge block at the rear
+    const hy = R * Math.sin(a0) + 4, hz = R * Math.cos(a0) + 14;
+    this.cyl(6, 110, M.chrome, (x0 + x1) / 2, hy, hz, g, 'x', 10); // front handle
+    for (const x of [x0 + 12, x1 - 12]) this.bx(x - 4, hy - 4, hz - 16, x + 4, hy + 4, hz, M.chrome, g);
     flat(g);
-    this.pickSphere(g, (x0 + x1) / 2, -112, 152, 60);
+    this.pickSphere(g, (x0 + x1) / 2, hy, hz, 60);
     this.click(g, 'guard');
   }
 
@@ -511,7 +527,7 @@ export class LatheModel {
     flat(this.estop);
     this.click(this.estop, 'estop');
     // carriage handwheel (left of the apron) with dial
-    this.hwCarriage = this.handwheel(c, 'carriageWheel', -62, 760, 205, { r: 88, dialR: 50, hubR: 24, spokes: 3 });
+    this.hwCarriage = this.handwheel(c, 'carriageWheel', -62, 760, 205, { r: 88, dialR: 50, hubR: 24, spokes: 3, dialMat: this.M.dialCarriage });
     this.click(this.hwCarriage.group, 'carriageWheel');
     // spindle FWD/STOP/REV lever (vertical slot at the right of the apron)
     this.bx(106, 735 - 36, 203, 118, 735 + 36, 205, M.black, c);
@@ -548,25 +564,27 @@ export class LatheModel {
     // cross-slide handwheel at the front bracket
     this.bx(-60, 962, 258, 22, 986, 275, M.paintDark, c, 2);
     flat(c);
-    this.hwCross = this.handwheel(c, 'crossWheel', -20, 985, 268, { r: 52, dialR: 38, hubR: 18, spokes: 3 });
+    this.hwCross = this.handwheel(c, 'crossWheel', -20, 985, 268, { r: 52, dialR: 38, hubR: 18, spokes: 3, dialMat: this.M.dialCross });
     this.click(this.hwCross.group, 'crossWheel');
     this.plate('cross', 50, c, -20, 940, 262);
     // hose to the coolant nozzle (flexible, drawn static) and nozzle
     // hose runs up behind the work and the nozzle points down at the tip from the back (keeps the
     // operator's view of the cut clear)
-    const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(115, 976, -110), new THREE.Vector3(112, 1060, -122), new THREE.Vector3(85, 1140, -100), new THREE.Vector3(48, 1152, -62), new THREE.Vector3(34, 1146, -46)]);
+    // short and low behind the work, so it never crosses the operator's view of the tool tip
+    const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(62, 978, -165), new THREE.Vector3(54, 1040, -168), new THREE.Vector3(44, 1088, -146), new THREE.Vector3(34, 1106, -118), new THREE.Vector3(30, 1108, -106)]);
     const hose = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 7, 8), M.black);
+    hose.name = 'coolant-hose'; hose.userData.keep = true;
     c.add(hose);
     this.nozzle = new THREE.Object3D();
-    this.nozzle.position.set(26, 1136, -34);
+    this.nozzle.position.set(27, 1108, -86);
     c.add(this.nozzle);
-    this.cyl(7, 22, M.chrome, 30, 1141, -40, c, 'y', 10).rotation.x = 0.9;
+    this.cyl(6, 24, M.chrome, 28, 1108, -96, c, 'y', 10).rotation.x = Math.PI / 2;
     flat(c);
     this.stream = new THREE.Mesh(new THREE.CylinderGeometry(2, 3, 1, 8, 1, true), M.coolantMat);
     this.stream.visible = false;
     this.stream.userData.noShadow = true;
     this.root.add(this.stream);
-    this.pickSphere(c, 30, 1141, -40, 22).userData.action = 'coolant';
+    this.pickSphere(c, 28, 1108, -96, 22).userData.action = 'coolant';
     // ---- cross slide (tip frame: x 0, tool tip at z 0)
     this.cross = this.group('crossSlide', c, -20, 0, 0);
     const x = this.cross;
@@ -609,9 +627,6 @@ export class LatheModel {
     this.bx(-38, 0, -38, 38, 40, 38, M.black, p, 5);
     this.cyl(30, 4, M.chrome, 0, 40, 0, p, 'y', 28);
     this.cyl(12, 40, M.chrome, 0, 62, 0, p, 'y', 16); // clamping stud
-    this.bx(-60, 66, -7, 60, 80, 7, M.black, p, 3); // top handle (rotates with the post)
-    this.sph(9, M.chrome, -62, 73, 0, p);
-    this.sph(9, M.chrome, 62, 73, 0, p);
     for (let i = 0; i < 4; i++) {
       const f = new THREE.Group();
       f.rotation.y = (i * Math.PI) / 2;
@@ -635,6 +650,16 @@ export class LatheModel {
     flat(p);
     this.pickSphere(p, 0, 70, 0, 60);
     this.click(p, 'toolPost');
+    // clamping lever on the stud nut: it stays pointing toward the operator's right (it does not index
+    // with the post), so it never lies across the operator's view of the work
+    this.postHandle = this.group('toolPostLever', parent, 0, 33, 0);
+    const h = this.postHandle;
+    this.cyl(17, 12, M.black, 0, 72, 0, h, 'y', 16);
+    const lev = this.bx(0, 67, -6, 84, 77, 6, M.black, h, 3);
+    void lev;
+    this.sph(10, M.chrome, 90, 72, 0, h);
+    h.rotation.y = -Math.PI / 4; // local +x -> world (+x, +z): toward the operator, right of the post
+    flat(h);
   }
 
   makeTool(i, g) {
@@ -722,18 +747,20 @@ export class LatheModel {
     // gooseneck work light on the headstock top
     // gooseneck from the back of the headstock lid, lamp over the chuck from behind (out of the
     // operator's line of sight to the cut)
-    const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(-730, 1272, -100), new THREE.Vector3(-722, 1345, -140), new THREE.Vector3(-685, 1385, -185), new THREE.Vector3(-628, 1372, -205)]);
-    g.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 6, 8), M.black));
-    this.cyl(16, 12, M.black, -730, 1274, -100, g, 'y', 16);
-    const head = this.cyl(34, 56, M.paint, -606, 1352, -200, g, 'y', 24, 24);
+    const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(-760, 1272, -150), new THREE.Vector3(-758, 1380, -205), new THREE.Vector3(-730, 1462, -262), new THREE.Vector3(-676, 1470, -282)]);
+    const neck = new THREE.Mesh(new THREE.TubeGeometry(curve, 24, 6, 8), M.black);
+    neck.name = 'lamp-neck'; neck.userData.keep = true;
+    g.add(neck);
+    this.cyl(16, 12, M.black, -760, 1274, -150, g, 'y', 16);
+    const head = this.cyl(34, 56, M.paint, -652, 1452, -280, g, 'y', 24, 24);
     head.rotation.set(0.75, 0, -0.45);
-    this.cyl(30, 3, M.lamp, -614, 1332, -184, g, 'y', 24).rotation.set(0.75, 0, -0.45);
+    this.cyl(30, 3, M.lamp, -660, 1432, -264, g, 'y', 24).rotation.set(0.75, 0, -0.45);
     this.bx(-1000, 1100, -150, -985, 1110, -140, M.black, g); // dummy cable gland
     this.plate('warnGlasses', 55, g, -930, 1225, 162.6);
     flat(g);
     // work light pick
     this.lightPick = this.group('light', this.root);
-    this.pickSphere(this.lightPick, -608, 1350, -196, 55);
+    this.pickSphere(this.lightPick, -654, 1450, -276, 55);
     this.click(this.lightPick, 'light');
   }
 

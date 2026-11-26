@@ -18,8 +18,13 @@ function mk(c, { repeat = false, aniso = 8 } = {}) {
 }
 
 // Dial band: 100 divisions around (u), numbers every 10, ascending clockwise when seen from the operator.
-export function dialTexture(div = 100, labelEvery = 10) {
-  const W = 1024, H = 128;
+// Graduated cone dial (wraps a CylinderGeometry band that LatheModel.handwheel() rotates so u = 0 sits at the
+// bottom and u grows counter-clockwise seen from the operator; the fixed index is at the top, u = 0.5).
+// Graduation k sits k divisions counter-clockwise of the zero, so turning the wheel clockwise (advance)
+// brings higher numbers under the index, exactly like the panel dials. Labels are drawn upright for an
+// operator looking down on the top of the dial.
+export function dialTexture(div = 100, labelEvery = 10, tickStep = 1) {
+  const W = 2048, H = 128;
   const c = cv(W, H);
   const g = c.getContext('2d');
   const grd = g.createLinearGradient(0, 0, 0, H);
@@ -29,24 +34,28 @@ export function dialTexture(div = 100, labelEvery = 10) {
   g.fillRect(0, 0, W, H);
   g.fillStyle = '#15171a';
   g.strokeStyle = '#15171a';
-  for (let k = 0; k < div; k++) {
-    const x = (k / div) * W;
-    const major = k % 10 === 0, mid = k % 5 === 0;
-    g.lineWidth = major ? 4 : 2;
+  const X = (k) => ((((0.5 + k / div) % 1) + 1) % 1) * W;
+  for (let k = 0; k < div; k += tickStep) {
+    const x = X(k);
+    const major = k % labelEvery === 0, mid = k % 5 === 0;
+    g.lineWidth = major ? 5 : 3;
     g.beginPath();
     g.moveTo(x, H);
-    g.lineTo(x, H - (major ? 54 : mid ? 40 : 28));
+    g.lineTo(x, H - (major ? 58 : mid ? 42 : 28));
     g.stroke();
-    if (k % labelEvery === 0) {
-      const v = (div - k) % div;
-      g.font = '700 38px Arial, sans-serif';
+    if (major) {
+      g.save();
+      g.translate(x, 34);
+      g.rotate(Math.PI);
+      g.font = '700 40px Arial, sans-serif';
       g.textAlign = 'center';
       g.textBaseline = 'middle';
-      g.fillText(String(v), x, 36);
+      g.fillText(String(k), 0, 0);
+      g.restore();
     }
   }
   g.fillStyle = '#b02222';
-  g.fillRect(0, 0, 6, H); // zero index tick (red)
+  g.fillRect(X(0) - 3, H - 64, 6, 64); // the dial's zero line (red)
   return mk(c, { repeat: true });
 }
 

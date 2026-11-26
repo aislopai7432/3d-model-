@@ -504,9 +504,10 @@ export class LatheGame {
       }
       default:
         tx = clamp(0.5 * tipX + 0.5 * (CHUCK_FACE_X + Math.min(end, 90)) + 10, -540, 600);
-        // over the operator's shoulder, steep enough to see the cut past the tool post
-        outTgt.set(tx, 1095, 0);
-        outPos.set(190, 600, 430);
+        // from the operator's position, a little toward the tailstock and high enough to look past the
+        // tool post: tool tip, the work and the chuck face all in view
+        outTgt.set(tx, 1090, 0);
+        outPos.set(420, 640, 480);
     }
     // user orbit / zoom around the target
     const off = outPos;
