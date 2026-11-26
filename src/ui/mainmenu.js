@@ -183,7 +183,9 @@ function show(app) {
       const r = Math.max(box.max.x - box.min.x, box.max.z - box.min.z) * 0.62;
       disc.scale.set(r, 30, r); disc.position.y = -15; spin.add(disc);
       scene.add(holder);
-      items[i] = { holder, spin, h: box.max.y - box.min.y, r };
+      // long and low (the lathe): frame it closer so it reads as big as the tall mills
+      const fit = (box.max.y - box.min.y) < 0.8 * Math.max(box.max.x - box.min.x, box.max.z - box.min.z) ? 0.76 : 1;
+      items[i] = { holder, spin, h: box.max.y - box.min.y, r, fit };
     };
     const buildEntry = async (i) => {
       const e = ENTRIES[i];
@@ -195,10 +197,7 @@ function show(app) {
         if (L) {
           const m = new L();
           m.update({ chuck: { dia: 40 }, carriageZ: 160, crossX: 40, tailstock: { z: 520, quill: 20, tool: { type: 'centre', d: 5 } } });
-          // the lathe is much lower than the mills: shown a size up so it fills its slot like they do
-          m.root.scale.setScalar(1.6);
-          obj = new THREE.Group();
-          obj.add(m.root);
+          obj = m.root;
         } else obj = ghostLathe(THREE);
       } else {
         if (!T) { const { createTextures } = await import('../scene/textures.js'); T = createTextures(); }
@@ -243,7 +242,7 @@ function show(app) {
       const need = cur ? Math.max(cur.h * 1.15, cur.r * 1.5) : 2200;
       const aspect = cam.aspect;
       const vf = Math.tan((cam.fov * Math.PI) / 360);
-      const wantR = Math.max(need / vf / 1.0, (cur ? cur.r * 2.3 : 2600) / (vf * aspect)) * 0.95;
+      const wantR = Math.max(need / vf / 1.0, (cur ? cur.r * 2.3 : 2600) / (vf * aspect)) * 0.95 * (cur?.fit || 1);
       camR += (wantR - camR) * Math.min(1, dt * 4);
       camH += ((cur ? cur.h * 0.55 : 1000) - camH) * Math.min(1, dt * 4);
       cam.position.set(0, camH + camR * 0.28, camR);
