@@ -485,7 +485,7 @@ export class Tutorial {
         target: () => W(viseWorld(), null, { text: 'Vise', small: true }),
         done: () => this.viseOk() || this.passed('loadVise') },
       { id: 'tightenVise', phase: 'Machine', title: 'Tighten the vise',
-        text: () => `A loose blank would be pulled out of the jaws by the cutter. Aim at the <b>vise handle</b> at the front of the vise and ${touch() ? '<b>tap the prompt</b> repeatedly' : '<b>hold E</b> (or the left mouse button)'} to wind the moving jaw in. When it touches the blank, keep turning until the gauge reads <b>TIGHT</b>. ${touch() ? '' : '<b>Q</b> (or right mouse) loosens it again; over-tightening can distort thin parts.'}`,
+        text: () => `A loose blank would be pulled out of the jaws by the cutter. Aim at the <b>vise handle</b> at the front of the vise and ${touch() ? '<b>tap the prompt</b> repeatedly' : '<b>hold E</b> (or the left mouse button)'} to wind the moving jaw in. When it touches the blank, keep turning until the gauge reads <b>TIGHT</b>. ${touch() ? '' : '<b>R</b> (or right mouse) loosens it again; over-tightening can distort thin parts.'}`,
         target: () => W(handleCrankWorld(), null, { text: 'Vise handle', small: true }),
         extra: () => { const v = g.vc; return `<div class="t-warn" style="opacity:.9">Vise: <b>${{ loose: 'LOOSE', snug: 'SNUG: a bit more', tight: 'TIGHT', over: 'OVER-TIGHT: ease off' }[v.state]}</b></div>`; },
         done: () => this.viseTight() || this.passed('tightenVise') },

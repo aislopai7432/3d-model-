@@ -1,5 +1,5 @@
 // Manual vise: the blank is placed between open jaws and the player cranks the vise handle by hand.
-// Hold E (or the left mouse button) while aiming at the handle to tighten, hold Q (or the right
+// Hold E (or the left mouse button) while aiming at the handle to tighten, hold R (or the right
 // mouse button) to loosen. The moving jaw closes onto the blank, then more turns build clamping
 // force: loose -> snug -> tight -> over-tight. Touch: tap the prompt to turn the handle a notch.
 const OPEN = 14; // mm the moving jaw stands back from the blank when the vise is open
@@ -50,11 +50,11 @@ export class ViseClamp {
     addEventListener('keydown', (e) => {
       if (typing(e.target) || e.ctrlKey || e.altKey || e.metaKey) return;
       if (e.code === 'KeyE') k.tight = true;
-      else if (e.code === 'KeyQ') k.loose = true;
+      else if (e.code === 'KeyR') k.loose = true;
     });
     addEventListener('keyup', (e) => {
       if (e.code === 'KeyE') k.tight = false;
-      else if (e.code === 'KeyQ') k.loose = false;
+      else if (e.code === 'KeyR') k.loose = false;
     });
     addEventListener('blur', () => { k.tight = k.loose = k.mt = k.ml = false; });
     addEventListener('mousedown', (e) => { if (e.button === 0) k.mt = true; else if (e.button === 2) k.ml = true; });
@@ -126,7 +126,7 @@ export class ViseClamp {
     const st = this.state, g = this.g;
     if (st === 'over' && !this._overWarned) {
       this._overWarned = true;
-      g.ui.toast('Over-tight: that is more force than needed. Thin parts can distort; ease it off with Q.', 'warn', 4500);
+      g.ui.toast('Over-tight: that is more force than needed. Thin parts can distort; ease it off with R.', 'warn', 4500);
     } else if (st !== 'over' && this.force < 0.9) this._overWarned = false;
     if (st === 'tight' && before === 'snug') { g.app.sound.clunk(); g.ui.toast('Tight: the blank is held firmly.', 'ok', 2500); }
   }
@@ -173,6 +173,6 @@ export class ViseClamp {
     const touch = this.g.fp.touchMode;
     this.elS.textContent = { loose: this.gap > 0.01 ? 'LOOSE (jaw open)' : 'LOOSE', snug: 'SNUG', tight: 'TIGHT', over: 'OVER-TIGHT' }[st];
     this.elS.style.color = { loose: '#aab3bd', snug: '#e0a93a', tight: '#3fbf74', over: '#e5534b' }[st];
-    this.elH.textContent = touch ? 'Tap to turn the handle' : 'Hold E / left mouse: tighten · Hold Q / right mouse: loosen';
+    this.elH.textContent = touch ? 'Tap to turn the handle' : 'Hold E / left mouse: tighten · Hold R / right mouse: loosen';
   }
 }

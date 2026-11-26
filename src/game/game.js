@@ -403,7 +403,7 @@ export class Game {
     if (this.ui.topModal() || this.measuring) return true;
     if (!this.op) return true; // walking: WASD etc. belong to the first-person controller
     // operator view: the control's keys work, except view presets and Esc (= step back)
-    if (e.key === 'Escape' || /^[1-6]$/.test(e.key) || e.code === 'KeyQ') return true;
+    if (e.key === 'Escape' || /^[1-6]$/.test(e.key) || e.code === 'KeyR') return true;
     if (this.op === 'pc' && (e.code === 'Space' || /^Arrow|^Page/.test(e.key))) return true; // no machine at the PC
     return false;
   }
@@ -526,7 +526,7 @@ export class Game {
     if (app.zmap.removedTotal > 0.5) {
       return this.ui.toast('The vise still holds a machined part. Put your blank back on the stock rack first (E at the rack), then unload the part and take it to the inspection bench.', 'warn', 6500);
     }
-    if (!this.vc.free) return this.ui.toast('Loosen the vise first: aim at the vise handle and hold Q (or right mouse).', 'warn', 4500);
+    if (!this.vc.free) return this.ui.toast('Loosen the vise first: aim at the vise handle and hold R (or right mouse).', 'warn', 4500);
     const old = this.blankFromApp();
     app.setStockEmpty(true);
     this.s.vise = null;
@@ -579,7 +579,7 @@ export class Game {
     if (busy) return this.ui.toast(busy, 'warn');
     if (app.stockEmpty) return this.ui.toast('The vise is empty.', 'warn');
     if (s.carry || this.carryPart) return this.ui.toast('Your hands are full.', 'warn');
-    if (!this.vc.free) return this.ui.toast('Loosen the vise first: aim at the vise handle and hold Q (or right mouse) until the jaw opens.', 'warn', 4500);
+    if (!this.vc.free) return this.ui.toast('Loosen the vise first: aim at the vise handle and hold R (or right mouse) until the jaw opens.', 'warn', 4500);
     const blank = this.blankFromApp();
     if (app.zmap.removedTotal > 0.5) {
       const job = this.job;
@@ -884,7 +884,7 @@ export class Game {
     else vl = s.carry?.kind === 'blank' ? 'Clamp the blank in the vise' : 'Vise (empty): fetch a blank from the stock rack';
     if (app.vise?.crank && !app.stockEmpty && this.mode === 'workshop') {
       const st = this.vc.state;
-      L.push({ object: app.vise.crank, id: 'viseHandle', label: this.fp.touchMode ? 'Turn the vise handle (tap)' : st === 'loose' ? 'Vise handle: hold E to tighten (Q loosens)' : st === 'over' ? 'Vise handle: over-tight, hold Q to ease off' : 'Vise handle: hold E tighter, Q loosens' });
+      L.push({ object: app.vise.crank, id: 'viseHandle', label: this.fp.touchMode ? 'Turn the vise handle (tap)' : st === 'loose' ? 'Vise handle: hold E to tighten (R loosens)' : st === 'over' ? 'Vise handle: over-tight, hold R to ease off' : 'Vise handle: hold E tighter, R loosens' });
     }
     if (app.vise) L.push({ object: app.vise.group, id: 'vise', label: vl });
     if (app.stockMesh && !app.stockEmpty) L.push({ object: app.stockMesh.group, id: 'vise', label: vl });
