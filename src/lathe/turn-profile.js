@@ -16,22 +16,25 @@ export const DEFAULT_DZ = 0.02;
 const D2R = Math.PI / 180;
 
 // ---------------------------------------------------------------- tool shapes (XZ polygons)
+// Reference point = the imaginary sharp tip (front edge x bottom edge), as on CNC tools: the nose circle
+// (radius rn) sits at dz = rn, so facing lands exactly on tipZ and turning lands exactly on tipR.
 function noseShape(rn, mTrail, extR, extra) {
   const sq = Math.sqrt(1 + mTrail * mTrail);
   const xt = (rn * mTrail) / sq, c = rn * (1 - sq);
   return {
-    zl: -rn, zr: extR, rn,
+    zl: 0, zr: extR + rn, rn,
     low(dz) {
-      if (dz < -rn) return Infinity;
-      if (dz <= xt) return rn - Math.sqrt(Math.max(0, rn * rn - dz * dz));
-      if (dz <= extR) return mTrail * dz + c;
+      if (dz < 0) return Infinity;
+      const u = dz - rn;
+      if (u <= xt) return rn - Math.sqrt(Math.max(0, rn * rn - u * u));
+      if (u <= extR) return mTrail * u + c;
       return Infinity;
     },
     ...extra,
   };
 }
 
-// Tool tip reference = lowest point of the cutting edge. `overhang` = distance from the tip back to the
+// `overhang` = distance from the tip back to the
 // tool-post face (for crash checks); fcMax = force the tool survives (N).
 export const TOOL_SHAPES = {
   // 80 degree diamond insert, nose radius 0.4, 95 deg approach: vertical front edge, 15 deg trailing edge
@@ -137,7 +140,7 @@ export class TurnProfile {
       if (!apply) continue;
       acc.area += d * dz;
       acc.vol += Math.PI * (ro * ro - nl * nl) * dz;
-      if (nl - ri <= EMPTY) { rOut[i] = ri; acc.emptied = true; } else rOut[i] = nl;
+      if (nl - ri <= EMPTY) { rOut[i] = ri; acc.emptied = true; if (i > 0 && this.has(i - 1)) this.mach[i - 1] = 1; } else rOut[i] = nl;
       this.mach[i] = 1;
       if (feed > 0) this.fe[i] = feed;
       if (thr > 0) this.thr[i] = thr;
@@ -218,6 +221,13 @@ export class TurnProfile {
     const a = this.firstMatFrom(g);
     if (a < 0) return null;
     const b = this.lastMat();
+    if ((b - a + 1) * this.dz < 1.0) { // swarf, not a part
+      for (let i = g; i <= b; i++) { this.rOut[i] = 0; this.rIn[i] = 0; }
+      this.hi = Math.min(this.hi, g - 1);
+      this.acc.i0 = Math.min(this.acc.i0, g); this.acc.i1 = Math.max(this.acc.i1, b);
+      this.endEdit(); this.resetAcc();
+      return null;
+    }
     const p = new TurnProfile({ zMin: this.z(a), zMax: this.z(b), radius: 0, dz: this.dz, chunkMm: this.chunk * this.dz });
     for (let i = a; i <= b; i++) {
       const k = i - a;
