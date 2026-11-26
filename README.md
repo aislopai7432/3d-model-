@@ -7,7 +7,7 @@ MillLab is a browser simulator of a vertical machining centre, operated through 
 - set up tools, wear, work offsets and the blank;
 - run the program in JOG, MDA or AUTO and watch a real Z-map model of the stock being machined.
 
-**Run it:** https://aislopcnc.github.io/3d-model-/ (GitHub Pages, served from this branch), or locally as described below.
+**Run it:** https://milllab.vercel.app/ (hosted on Vercel, auto-deployed from the site branch), or locally as described below.
 
 There is no build step and nothing to install. Three.js 0.160 loads from jsDelivr through an import map. Textures, tools, sounds and example programs are generated at runtime.
 
