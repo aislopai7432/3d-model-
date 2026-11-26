@@ -380,6 +380,7 @@ class App {
     if (c.state === 'hold') return c.cycleStart();
     if (c.estop || c.state === 'alarm') return c.cycleStart();
     if (c.exec) return;
+    if ((c.mode === 'AUTO' || c.mode === 'MDA') && this.game?.clampCheck?.() === 'refuse') return;
     if (c.mode === 'AUTO') {
       if (this.settings.freshBlank && !this.stockEmpty && this.zmap.removedTotal > 0) {
         if (this.game?.manualBlanks) {

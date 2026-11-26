@@ -10,6 +10,7 @@ import { inspectPart } from './inspect.js';
 import { drawingCanvas } from './drawing.js';
 import { StockMesh } from '../scene/stockmesh.js';
 import { GameUI } from './ui-game.js';
+import { ViseClamp } from './viseclamp.js';
 import { partStore, zmapState, zmapFromState } from './partstore.js';
 import { ZMap } from '../sim/zmap.js';
 import { TUTORIAL_PART } from './tutorial-part.js';
@@ -101,6 +102,7 @@ export class Game {
     this.buildPcScreen();
     this.ui = new GameUI(this);
     this.ui.build();
+    this.vc = new ViseClamp(this);
     this.initVise();
     this.bindController();
     this.fillRack();
@@ -191,6 +193,7 @@ export class Game {
         const same = sameBlank(st, app.stock) && st.protrusion === app.stock.protrusion;
         if (same && app.restoreStockZMap(vise.zmap)) {
           if (vise.machined) this.machinedSerial = app.stockSerial;
+          if (app.zmap.removedTotal > 0 && this.vc.force < 0.4) { this.vc.setTight(); this.s.vc = this.vc.toJSON(); }
           this._viseSaved = this.viseSig();
           app.ui.log(`Restored the part in the vise (${(app.zmap.removedTotal / 1000).toFixed(2)} cm³ machined)`);
         } else partStore.del('vise');
@@ -359,6 +362,7 @@ export class Game {
   update(dt) {
     if (!(dt > 0)) dt = 0;
     if (this.tut?.active) this.tut.update(dt);
+    this.vc.update(dt);
     if (this.mode === 'workshop') {
       const p = this.prog;
       if (p && !p.done && !document.hidden) p.time = (p.time || 0) + dt;
@@ -443,6 +447,7 @@ export class Game {
       app.setStockEmpty(true);
     }
     if (s.carry && s.carry.kind !== 'blank') s.carry = null;
+    if (s.vise) this.vc.fromJSON(s.vc); else this.vc.setOpen();
     this.seenSerial = app.stockSerial;
   }
 
@@ -458,6 +463,9 @@ export class Game {
     this.seenSerial = app.stockSerial;
     if (this._ownRebuild) { this._ownRebuild = false; return; }
     this.s.vise = app.stockEmpty ? null : this.blankFromApp();
+    // a blank set by the control (New blank, examples...) is simply there, clamped
+    if (app.stockEmpty) this.vc.setOpen(); else this.vc.setTight();
+    this.s.vc = this.vc.toJSON();
     this.save();
     this.markParts('vise');
   }
@@ -518,12 +526,13 @@ export class Game {
     if (app.zmap.removedTotal > 0.5) {
       return this.ui.toast('The vise still holds a machined part. Put your blank back on the stock rack first (E at the rack), then unload the part and take it to the inspection bench.', 'warn', 6500);
     }
+    if (!this.vc.free) return this.ui.toast('Loosen the vise first: aim at the vise handle and hold Q (or right mouse).', 'warn', 4500);
     const old = this.blankFromApp();
     app.setStockEmpty(true);
     this.s.vise = null;
     this.markParts('vise');
     this.loadBlank();
-    if (!app.stockEmpty) this.ui.toast(`Swapped blanks: the old ${blankLabel(old)} went back on the rack, yours is clamped.`, 'ok', 4500);
+    if (!app.stockEmpty) this.ui.toast(`Swapped blanks: the old ${blankLabel(old)} went back on the rack, yours sits in the open vise: tighten it.`, 'ok', 4500);
   }
 
   machineBusy() {
@@ -550,13 +559,15 @@ export class Game {
     s.carry = null;
     this.seenSerial = app.stockSerial;
     this._ownRebuild = false;
+    this.vc.setOpen(); // the blank rests on the parallels between open jaws: not clamped yet
+    s.vc = this.vc.toJSON();
     this.markParts('vise');
     const job = this.job;
     if (job && fitsPart(b, job) && this.prog) Object.assign(this.prog, { machined: false, unloaded: false, inspected: false });
     app.sound.clunk();
     setTimeout(() => app.sound.clunk(), 180);
-    app.ui.log(`Blank ${blankLabel(b)} clamped in the vise, ${app.placement.protrusion.toFixed(1)} mm above the jaws`);
-    this.ui.toast(job && fitsPart(b, job) ? 'Blank clamped. Next: set G54 on its top front-left corner at the control panel.' : `Blank ${blankLabel(b)} clamped in the vise.`, 'ok', 4500);
+    app.ui.log(`Blank ${blankLabel(b)} placed in the vise (not clamped yet), ${app.placement.protrusion.toFixed(1)} mm above the jaws`);
+    this.ui.toast(`Blank ${blankLabel(b)} sits in the open vise. Now tighten it: aim at the vise handle and hold E (or left mouse).`, 'ok', 5500);
     this.refreshRack();
     this.updateHand();
     this.save();
@@ -568,6 +579,7 @@ export class Game {
     if (busy) return this.ui.toast(busy, 'warn');
     if (app.stockEmpty) return this.ui.toast('The vise is empty.', 'warn');
     if (s.carry || this.carryPart) return this.ui.toast('Your hands are full.', 'warn');
+    if (!this.vc.free) return this.ui.toast('Loosen the vise first: aim at the vise handle and hold Q (or right mouse) until the jaw opens.', 'warn', 4500);
     const blank = this.blankFromApp();
     if (app.zmap.removedTotal > 0.5) {
       const job = this.job;
@@ -586,6 +598,8 @@ export class Game {
     }
     app.setStockEmpty(true);
     s.vise = null;
+    this.vc.setOpen();
+    this.s.vc = this.vc.toJSON();
     this.markParts('vise', 'carry');
     app.sound.clunk();
     this.refreshRack();
@@ -821,6 +835,22 @@ export class Game {
     });
   }
 
+  // Shop safety check before CYCLE START: 'refuse' when the blank is not clamped. Snug / over-tight run with a warning.
+  clampCheck() {
+    if (this.mode !== 'workshop' || this.app.stockEmpty) return 'ok';
+    const st = this.vc.state;
+    if (st === 'loose') {
+      const msg = 'Workpiece not clamped: tighten the vise (aim at its handle, hold E) before starting.';
+      this.ui.toast(msg, 'warn', 5000);
+      this.app.ui.log(msg, 'warn');
+      this.app.ui.hmi.addAlarm('8100 ' + msg);
+      return 'refuse';
+    }
+    if (st === 'snug') this.ui.toast('The vise is only snug: the part could shift under the cutter. Tighten it a little more.', 'warn', 4500);
+    else if (st === 'over') this.ui.toast('Vise is over-tight: thin parts can distort. Running anyway.', 'warn', 3500);
+    return 'ok';
+  }
+
   // ------------------------------------------------------------------ interactables
   interactables() {
     const L = this._ilist;
@@ -852,6 +882,10 @@ export class Game {
       else vl = machined ? 'Unload the part' : 'Take the blank out of the vise';
     }
     else vl = s.carry?.kind === 'blank' ? 'Clamp the blank in the vise' : 'Vise (empty): fetch a blank from the stock rack';
+    if (app.vise?.crank && !app.stockEmpty && this.mode === 'workshop') {
+      const st = this.vc.state;
+      L.push({ object: app.vise.crank, id: 'viseHandle', label: this.fp.touchMode ? 'Turn the vise handle (tap)' : st === 'loose' ? 'Vise handle: hold E to tighten (Q loosens)' : st === 'over' ? 'Vise handle: over-tight, hold Q to ease off' : 'Vise handle: hold E tighter, Q loosens' });
+    }
     if (app.vise) L.push({ object: app.vise.group, id: 'vise', label: vl });
     if (app.stockMesh && !app.stockEmpty) L.push({ object: app.stockMesh.group, id: 'vise', label: vl });
     if (this.instruments) {
@@ -892,6 +926,8 @@ export class Game {
       const a = id.slice(3);
       if (a === 'door' && app.controller.exec && app.controller.doorInterlock && app.controller.door.target < 0.5) this.ui.toast('Door interlock: the doors stay closed while the program runs.', 'warn');
       app.ui.act(a);
+    } else if (id === 'viseHandle') {
+      if (this.fp.touchMode) this.vc.step(); // desktop: the handle is turned by holding E / the mouse (ViseClamp.update)
     } else if (id === 'vise') {
       if (!app.stockEmpty && this.s.carry?.kind === 'blank') this.swapBlank();
       else if (!app.stockEmpty) this.unload();

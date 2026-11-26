@@ -239,7 +239,7 @@ export class LatheGame {
     g.name = 'parted-piece';
     g.add(mesh.group);
     // generous pick box around the (small) part so it is easy to grab out of the tray
-    const pr = piece.profile, pad = Math.max(45, pr.rBound + 30);
+    const pr = piece.profile, pad = Math.max(110, pr.rBound + 70); // reaches out past the chip-tray lip
     g.add(new HitBox(new THREE.Vector3(pr.zMin - 25, -pad, -pad), new THREE.Vector3(pr.zMax + 25, pad, pad)));
     g.position.set(CHUCK_FACE_X, CENTER_Y, 0);
     g.rotation.x = this.app.vis.angle;
@@ -447,7 +447,25 @@ export class LatheGame {
     else if (id === 'drawingDesk') { if (this.job) this.ui.openDrawing(this.job); else this.ui.openJobs(); }
     else if (id === 'chuck') this.ui.openChuck();
     else if (id.startsWith('piece:')) this.pickUpPiece(+id.slice(6));
-    else if (id === 'lathe' || id.startsWith('lc:')) this.enterOp();
+    else if (id === 'lathe' || id.startsWith('lc:')) {
+      // a part lying in the chip tray right where you are looking: pick it up rather than step up to the lathe
+      const p = this.pieceAlongView();
+      if (p) this.pickUpPiece(p.id); else this.enterOp();
+    }
+  }
+
+  pieceAlongView() {
+    const cam = this.app.viewer.camera, o = cam.getWorldPosition(new THREE.Vector3()), d = cam.getWorldDirection(new THREE.Vector3());
+    let best = null, bd = Infinity;
+    for (const p of this.pieces) {
+      if (!p.settled) continue;
+      const c = p.group.getWorldPosition(new THREE.Vector3()).sub(o);
+      const t = c.dot(d);
+      if (t < 0 || t > 2600) continue;
+      const off = c.addScaledVector(d, -t).length();
+      if (off < Math.max(90, p.piece.profile.rBound + 60) && off < bd) { bd = off; best = p; }
+    }
+    return best;
   }
 
   footstep(speed) {

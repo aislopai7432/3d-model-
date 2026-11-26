@@ -57,7 +57,8 @@ export const LATHE_TUTORIAL = [
     id: 'face', title: 'Face the end',
     text: 'With <b>T1</b>, bring the tool just past the end of the bar with the carriage (<kbd>←</kbd>/<kbd>→</kbd>), then wind the cross-slide <b>in</b> (<kbd>↑</kbd>, hold <kbd>Shift</kbd> to go faster) right across the centre. Take about 0.5 mm.',
     hint: 'If nothing happens the tool is beyond the end: move the carriage 0.5 mm toward the chuck and go across again.',
-    check: (g, t) => g.sim.state.stock && t.stick0 != null && g.sim.state.stock.stickout < t.stick0 - 0.1,
+    // faced = the free end is shorter than the bar as it was chucked (works even if you faced before this step)
+    check: (g) => { const p = g.sim.profile, e = g.sim.endZ(); return !!p && e != null && e < p.zMax - 0.1; },
   },
   {
     id: 'zero', title: 'Touch off and zero the dial',
@@ -150,13 +151,12 @@ export class LatheTutorial {
   }
   enter() {
     const st = this.game.sim.state;
-    if (this.cur?.id === 'face') this.ctx.stick0 = st.stock ? st.stock.stickout : null;
-    if (this.cur?.id === 'zero') this.ctx.zeroed = false;
+    void st;
   }
   onEvent(e) {
     if (!this.active) return;
     if (e.type === 'dialZero' && e.axis === 'cross') this.ctx.zeroed = true;
-    if (e.type === 'stockLoaded' && this.cur?.id === 'face') this.ctx.stick0 = this.game.sim.state.stock?.stickout ?? null;
+    if (e.type === 'stockLoaded') this.ctx.zeroed = false; // a new bar must be touched off again
   }
   poke() { this._t = 1; }
   update(dt) {

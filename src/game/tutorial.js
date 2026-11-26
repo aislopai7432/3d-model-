@@ -143,6 +143,7 @@ export class Tutorial {
     return !!b && b.x === p.stock.x && b.y === p.stock.y && b.z === p.stock.z && b.material === p.material;
   }
   viseOk() { return !this.app.stockEmpty && this.fits(this.game.s.vise); }
+  viseTight() { return this.viseOk() && this.game.vc.clamped && this.game.vc.state !== 'loose' && this.game.vc.force >= 0.4; }
   machined() {
     const g = this.game;
     return (this.viseOk() && g.machinedSerial === this.app.stockSerial) || (this.jobOn() && !!g.prog.machined) || this.unloaded();
@@ -159,7 +160,8 @@ export class Tutorial {
     const i = order.indexOf(stepId);
     const ms = [
       ['takeBlank', () => this.viseOk() || this.machined()],
-      ['loadVise', () => this.viseOk() && this.app.zmap.removedTotal > 0.5 || this.machined()],
+      ['loadVise', () => this.viseTight() || this.machined()],
+      ['tightenVise', () => this.viseOk() && this.app.zmap.removedTotal > 0.5 || this.machined()],
       ['cycleStart', () => this.machined()],
       ['unload', () => this.unloaded()],
       ['bench', () => this.onPlate()],
@@ -371,6 +373,7 @@ export class Tutorial {
     const rackStand = new THREE.Vector3(rack.x - 1500, 0, rack.z);
     const machineStand = new THREE.Vector3(80, 0, 1320);
     const plateStand = anchors.inspectionCamera ? new THREE.Vector3(anchors.inspectionCamera.eye.x, 0, anchors.inspectionCamera.eye.z) : null;
+    const handleCrankWorld = () => (app.vise?.crank ? app.vise.crank.getWorldPosition(this._w.set(0, 0, 0)).clone() : viseWorld());
     const viseWorld = () => app.machine.workGroup.localToWorld(this._w.set(0, (app.placement?.top || 140) + 40, 0)).clone();
     const handleWorld = () => {
       const h = app.machine.clickables.find((o) => o.userData.action === 'door');
@@ -477,10 +480,15 @@ export class Tutorial {
         text: () => `The vise sits behind the sliding doors. Aim at a <b>door handle</b> and ${touch() ? 'tap the prompt' : 'press E'}. The doors are interlocked: they stay shut while a program runs.`,
         target: () => W(handleWorld().add(new THREE.Vector3(0, 120, 60)), null, { text: 'Door handle', small: true }),
         done: () => app.controller.door.target > 0.5 || this.viseOk() || this.passed('doors') },
-      { id: 'loadVise', phase: 'Machine', title: 'Clamp the blank in the vise',
-        text: () => `Aim at the <b>vise</b> on the machine table and ${touch() ? 'tap the prompt' : 'press E'} to clamp the blank. It stands ${P.protrusion} mm above the jaws, enough for the deepest cut.`,
+      { id: 'loadVise', phase: 'Machine', title: 'Put the blank in the vise',
+        text: () => `Aim at the <b>vise</b> on the machine table and ${touch() ? 'tap the prompt' : 'press E'} to set the blank between the jaws. It rests on the parallels and stands ${P.protrusion} mm above the jaws, enough for the deepest cut. It is <i>not</i> clamped yet.`,
         target: () => W(viseWorld(), null, { text: 'Vise', small: true }),
         done: () => this.viseOk() || this.passed('loadVise') },
+      { id: 'tightenVise', phase: 'Machine', title: 'Tighten the vise',
+        text: () => `A loose blank would be pulled out of the jaws by the cutter. Aim at the <b>vise handle</b> at the front of the vise and ${touch() ? '<b>tap the prompt</b> repeatedly' : '<b>hold E</b> (or the left mouse button)'} to wind the moving jaw in. When it touches the blank, keep turning until the gauge reads <b>TIGHT</b>. ${touch() ? '' : '<b>Q</b> (or right mouse) loosens it again; over-tightening can distort thin parts.'}`,
+        target: () => W(handleCrankWorld(), null, { text: 'Vise handle', small: true }),
+        extra: () => { const v = g.vc; return `<div class="t-warn" style="opacity:.9">Vise: <b>${{ loose: 'LOOSE', snug: 'SNUG: a bit more', tight: 'TIGHT', over: 'OVER-TIGHT: ease off' }[v.state]}</b></div>`; },
+        done: () => this.viseTight() || this.passed('tightenVise') },
       // ---- control
       { id: 'pendant', phase: 'Control', title: 'Step up to the control panel',
         text: () => `Use the <b>control panel</b> (the pendant hanging on the right of the doors). The real 808D-style control opens: screen on the right, machine control panel along the bottom, your drawing on the left.`,
@@ -515,7 +523,7 @@ export class Tutorial {
             return { el: this.sk('Set from blank'), text: 'Set from blank' };
           });
         },
-        done: () => (this.viseOk() && g.g54Ok()) || this.passed('g54') },
+        done: () => (this.viseTight() && g.g54Ok()) || this.passed('g54') },
       // ---- program
       { id: 'progOpen', atPanel: true, phase: 'Program', title: 'Open the program',
         text: () => `Open the <b>PROGRAM</b> area. JOB_${esc(P.id)}.MPF is prepared: tool changes and moves are there, the cycles go below the lines marked <b>&gt;&gt;&gt;</b>.`,
