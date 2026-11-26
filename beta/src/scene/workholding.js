@@ -56,8 +56,14 @@ export function buildVise(place) {
   // fixed jaw at the back (+Y), moving jaw at the front (-Y)
   add('fixed jaw', -jw, W / 2 + 6, fl, jw, W / 2 + th, jt, m.body, 3);
   add('fixed jaw plate', -jw, W / 2, fl + 4, jw, W / 2 + 6, jt, m.jaw);
+  // the moving jaw rides in its own group: the game slides it forward (-Y) to open the vise
+  const moving = new THREE.Group();
+  moving.name = 'vise-moving-jaw';
+  const n0 = g.children.length;
   add('moving jaw', -jw, -W / 2 - th, fl, jw, -W / 2 - 6, jt, m.body, 3);
-  add('moving jaw plate', -jw, -W / 2 - 6, fl + 4, jw, -W / 2, jt, m.jaw);
+  add(null, -jw, -W / 2 - 6, fl + 4, jw, -W / 2, jt, m.jaw);
+  for (const k of g.children.splice(n0)) moving.add(k);
+  g.add(moving);
   // rear jaw support block
   add('vise body', -70, W / 2 + th, fl - 10, 70, Math.min(140, W / 2 + th + 30), fl + 20, m.body, 4);
   // parallels under the stock
@@ -73,14 +79,27 @@ export function buildVise(place) {
   screw.rotation.x = Math.PI / 2;
   screw.position.set(0, 45, 150 + 40);
   g.add(screw);
+  // crank: hub + T-bar with ball ends; the group turns about the screw axis. An invisible fat
+  // cylinder around the hub makes it easy to aim at.
+  const crank = new THREE.Group();
+  crank.name = 'vise-crank';
+  crank.position.set(0, 45, 150 + 105);
+  g.add(crank);
   const hub = new THREE.Mesh(new THREE.CylinderGeometry(16, 16, 26, 6), m.dark);
   hub.rotation.x = Math.PI / 2;
-  hub.position.set(0, 45, 150 + 100);
-  g.add(hub);
+  crank.add(hub);
   const bar = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 170, 12), m.dark);
   bar.rotation.z = Math.PI / 2;
-  bar.position.set(0, 45, 150 + 110);
-  g.add(bar);
+  bar.position.z = 6;
+  crank.add(bar);
+  for (const s of [-1, 1]) {
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(11, 12, 8), m.dark);
+    ball.position.set(s * 85, 0, 6);
+    crank.add(ball);
+  }
+  const hit = new THREE.Mesh(new THREE.CylinderGeometry(70, 70, 50, 12), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false }));
+  hit.rotation.x = Math.PI / 2;
+  crank.add(hit);
   boxes.push({ name: 'vise handle', min: [-85, -270, 30], max: [85, -150, 60] });
   // clamps holding the vise to the T-slots
   for (const s of [-1, 1]) {
@@ -89,7 +108,7 @@ export function buildVise(place) {
     bolt.position.set(s * 100, 20, 0);
     g.add(bolt);
   }
-  return { group: g, boxes };
+  return { group: g, boxes, moving, crank };
 }
 
 // X/Y/Z triad drawn at the active work zero.

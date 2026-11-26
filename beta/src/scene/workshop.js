@@ -470,10 +470,12 @@ export function buildWorkshop(opts = {}) {
     const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
     B.add('floor', M.hazard, tPlane(), mtx(cx, 1.8, cz, len, 110, 1, -HALF_PI, 0, alongX ? 0 : HALF_PI, 'XYZ'), [0, 0, len / 420, 1]);
   };
-  hz(-1550, -1950, 2400, -1950);
-  hz(-1550, 2300, 2400, 2300);
-  hz(-1550, -1950, -1550, 2300);
-  hz(2400, -1950, 2400, 2300);
+  // (the engine lathe: bed + stand -1000..985 x -265..300, operator side and the chair in front)
+  const HZ = PROFILE.id === 'lathe' ? [-1500, -800, 1750, 1500] : [-1550, -1950, 2400, 2300];
+  hz(HZ[0], HZ[1], HZ[2], HZ[1]);
+  hz(HZ[0], HZ[3], HZ[2], HZ[3]);
+  hz(HZ[0], HZ[1], HZ[0], HZ[3]);
+  hz(HZ[2], HZ[1], HZ[2], HZ[3]);
   // oil stains
   const stains = [[600, 1250, 900, 0], [-900, -1700, 700, 1], [1900, 200, 800, 2], [-5600, -3400, 1100, 0], [6500, 2900, 900, 1], [-2600, 900, 600, 3], [3200, 3600, 1000, 3], [-5200, 2100, 700, 2], [4300, -3300, 900, 0], [5600, 6900, 1400, 3]];
   for (const [x, z, s, k] of stains) {
@@ -482,8 +484,9 @@ export function buildWorkshop(opts = {}) {
   }
   // anti-fatigue mats: in front of the VMC (replaces the one in machine.js 'floor'), lathe, bench
   if (PROFILE.id === 'vmc560') B.box('floor', M.rubber, -750, 0, 940, 750, 14, 1700);
+  else if (PROFILE.id === 'lathe') B.box('floor', M.rubber, -1000, 0, 360, 820, 14, 1060); // along the lathe front
   else B.box('floor', M.rubber, -700, 0, 880, 800, 14, 1650);
-  B.box('floor', M.rubber, -6700, 0, -3950, -4700, 12, -3350);
+  if (PROFILE.id !== 'lathe') B.box('floor', M.rubber, -6700, 0, -3950, -4700, 12, -3350); // in front of the decorative lathe
   B.box('floor', M.rubber, -1500, 0, -4150, 600, 12, -3600);
 
   // ================================================================ props
@@ -1116,7 +1119,9 @@ export function buildWorkshop(opts = {}) {
     B.collide(-1010, 280, 1010, 1520);
   });
 
-  // ---------- manual lathe (back wall, left)
+  // ---------- manual lathe (back wall, left): decoration in the mill profiles; in the lathe profile the
+  // working engine lathe stands at the origin instead
+  if (PROFILE.id !== 'lathe') {
   B.at(-5700, R.z0, 0, () => {
     const b = 'int';
     const L = C.lathe;
@@ -1167,6 +1172,7 @@ export function buildWorkshop(opts = {}) {
     decal(b, 'signRotating', 400, 1400, 491, 200, 275);
     B.collide(-1220, 440, 1220, 1100);
   });
+  }
   // yellow tipping skip for swarf next to the lathe
   B.at(-3800, -4500, 0, () => {
     const b = 'int';
@@ -1325,6 +1331,8 @@ export function buildWorkshop(opts = {}) {
       { minX: 1050, maxX: 2010, minZ: -530, maxZ: -70 }, // chip conveyor + bin
       { minX: 760, maxX: 1220, minZ: 880, maxZ: 1080 }, // pendant arm / control panel
     );
+  } else if (PROFILE.id === 'lathe') {
+    // the engine lathe at the origin: the lathe app adds LATHE_COLLIDERS (lathe-model.js)
   } else {
     B.colliders.push(
       { minX: -940, maxX: 800, minZ: -1260, maxZ: 660 }, // Mini Mill cabinet, rear cabinet, coolant tank

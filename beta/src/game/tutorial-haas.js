@@ -165,7 +165,7 @@ export function haasSteps(t) {
         if (hh.disp !== 'offset') return key('OFFSET', 'OFFSET');
         return key('F4', 'F4: Work tab', 'Toggles the Tool and Work tabs');
       },
-      done: () => (h().disp === 'offset' && h().tab.offset === 1) || (t.viseOk() && g.g54Ok()) || t.passed('hOffsets') },
+      done: () => (h().disp === 'offset' && h().tab.offset === 1) || (t.viseTight() && g.g54Ok()) || t.passed('hOffsets') },
     { id: 'g54', atPanel: true, phase: 'Setup', title: 'Set G54 on the blank',
       text: () => 'With the cursor on <b>G54</b> press <b>F3 (Probing Actions)</b> and choose <b>Probe corner: top front-left</b> (ENTER). The probe touches the blank and writes X, Y and Z of the corner into G54. (By hand: jog to the corner and press PART ZERO SET.)',
       extra: () => (c().homed ? '' : '<div class="t-warn">The machine is not homed: do the POWER UP step first.</div>'),
@@ -181,7 +181,7 @@ export function haasSteps(t) {
         if (hh.cursor('work', { row: 1, col: 1 }).row !== 1) return { el: $('#haas [data-cur="work"][data-row="1"]'), text: 'Put the cursor on G54', sub: 'UP / DOWN, or click the row' };
         return key('F3', 'F3: Probing Actions', 'WIPS probe: finds the corner');
       },
-      done: () => (t.viseOk() && g.g54Ok()) || t.passed('g54') },
+      done: () => (t.viseTight() && g.g54Ok()) || t.passed('g54') },
     { id: 'hList', atPanel: true, phase: 'Program', title: 'LIST PROGRAM: select the job program',
       text: () => `Press <b>LIST PROGRAM</b>: the program manager lists the files in the control's memory. Accepting the job created <b>${JOB}</b>; the <b>*</b> in the last column marks the active program. If it is not active, move the cursor onto it and press <b>SELECT PROGRAM</b>.`,
       enter: () => { if (!app.programs.has(JOB)) app.programs.put(JOB, g.programTemplate(P)); },
